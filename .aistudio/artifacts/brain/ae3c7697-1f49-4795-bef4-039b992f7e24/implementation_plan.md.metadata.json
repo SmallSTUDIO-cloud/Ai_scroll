@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan for AI BREAK: a fully offline, local Android application where an autonomous AI agent explores a simulated vertical-video feed, develops dynamic preferences over time, logs decisions, and operates with zero cloud or API dependency.",
+  "updatedAt":  "2026-10-20T16:55:41.176357590Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

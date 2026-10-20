@@ -1,0 +1,6 @@
+{
+  "name": "AI BREAK",
+  "description": "Your AI works hard. Let it scroll. A fully local, offline AI social experiment with autonomous feed exploration and evolving memory.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
