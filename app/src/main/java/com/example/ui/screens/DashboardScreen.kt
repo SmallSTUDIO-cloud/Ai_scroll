@@ -36,6 +36,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +48,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.companion.model.BrainProvider
 import com.example.engine.ModelInfo
 import com.example.model.PersonalityProfile
 import com.example.model.SessionRecord
@@ -226,14 +229,19 @@ fun DashboardScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             DashboardNavCard(
-                title = "Real App Control (Accessibility)",
-                subtitle = "Authorized scrolling on physical device apps",
+                title = "Launch Real Apps (Instagram / Shorts / Reddit)",
+                subtitle = "Authorized autonomous scrolling on physical device apps",
                 icon = Icons.Default.AccessibilityNew,
                 accentColor = TerminalAmber,
                 onClick = onOpenRealDeviceSetup,
                 modifier = Modifier.fillMaxWidth(),
                 testTag = "nav_real_device_card"
             )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Floating AI Companion Overlay Card
+            FloatingCompanionHubCard()
 
             Spacer(modifier = Modifier.height(22.dp))
 
@@ -563,3 +571,133 @@ private fun PastSessionRow(
         }
     }
 }
+
+@Composable
+fun FloatingCompanionHubCard() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isRunning by com.example.companion.FloatingCompanionController.isServiceRunning.collectAsStateWithLifecycle()
+    val companionState by com.example.companion.FloatingCompanionController.companionState.collectAsStateWithLifecycle()
+    val provider by com.example.companion.FloatingCompanionController.selectedProvider.collectAsStateWithLifecycle()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CyberCardSurface)
+            .border(1.dp, if (isRunning) NeonCyan.copy(alpha = 0.6f) else CyberCardBorder, RoundedCornerShape(16.dp))
+            .padding(16.dp)
+            .testTag("floating_companion_hub_card")
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.companion_avatar),
+                        contentDescription = "Companion Avatar",
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .border(1.dp, if (isRunning) NeonCyan else CyberCardBorder, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "AI BREAK COMPANION",
+                                color = TextPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isRunning) "ACTIVE" else "OFFLINE",
+                                color = if (isRunning) TerminalEmerald else TextMuted,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .background(
+                                        if (isRunning) TerminalEmerald.copy(alpha = 0.15f) else CyberCardBorder.copy(alpha = 0.5f),
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                        Text(
+                            text = "Movable floating avatar • ${provider.displayName}",
+                            color = NeonCyan,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                androidx.compose.material3.Switch(
+                    checked = isRunning,
+                    onCheckedChange = { enable ->
+                        if (enable) {
+                            com.example.companion.FloatingCompanionController.startCompanionService(context)
+                        } else {
+                            com.example.companion.FloatingCompanionController.stopCompanionService(context)
+                        }
+                    },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = ObsidianBg,
+                        checkedTrackColor = NeonCyan,
+                        uncheckedTrackColor = CyberCardBorder
+                    ),
+                    modifier = Modifier.testTag("companion_toggle_switch")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Hovers above other apps (including Instagram) with draggable snapping. Tap to ask questions, explain on-screen reels, or draft comments.",
+                color = TextSecondary,
+                fontSize = 11.sp,
+                lineHeight = 15.sp
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        com.example.companion.FloatingCompanionController.setSheetExpanded(true)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CyberCardBorder.copy(alpha = 0.7f),
+                        contentColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).testTag("open_companion_chat_button")
+                ) {
+                    Text("OPEN CHAT PANEL", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+
+                Button(
+                    onClick = {
+                        com.example.companion.FloatingCompanionController.explainCurrentScreen()
+                        com.example.companion.FloatingCompanionController.setSheetExpanded(true)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = NeonCyan.copy(alpha = 0.15f),
+                        contentColor = NeonCyan
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).testTag("quick_explain_reel_button")
+                ) {
+                    Text("EXPLAIN REEL", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
+    }
+}
+

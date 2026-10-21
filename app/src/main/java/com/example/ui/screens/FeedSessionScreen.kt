@@ -86,6 +86,10 @@ fun FeedSessionScreen(
 
     // Sync ViewModel programmatic reel advance to Pager state
     LaunchedEffect(uiState.currentIndex) {
+        val currentItem = uiState.items.getOrNull(uiState.currentIndex)
+        if (currentItem != null) {
+            com.example.companion.FloatingCompanionController.updateScreenContext("${currentItem.title} (${currentItem.category}) - ${currentItem.description}")
+        }
         if (pagerState.currentPage != uiState.currentIndex) {
             pagerState.animateScrollToPage(uiState.currentIndex)
         }

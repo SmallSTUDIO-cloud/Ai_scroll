@@ -31,19 +31,44 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Accept Android SDK licenses
+      - name: Set up Android SDK
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          echo "Setting up Android SDK environment..."
+          export ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}
+          export ANDROID_SDK_ROOT=$ANDROID_HOME
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
 
-      - name: Install Android Platform 36 and Build-Tools
-        run: |
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+          # Pre-accept all Android SDK licenses so Gradle never prompts or fails
+          mkdir -p "$ANDROID_HOME/licenses"
+          echo -e "\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_HOME/licenses/android-sdk-license"
+          echo -e "\n84831b9409646a2545e698332c78b687f56fa042\ntt-ok" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+          echo -e "\n33b6a2b64607f11b759f320ef9dff4ae5c47d97a" > "$ANDROID_HOME/licenses/google-gdk-license"
+          echo -e "\ne9acab5b5fbb560a72cfa4f6d0ee0da0df705f60" > "$ANDROID_HOME/licenses/mips-android-sysimage-license"
+
+          # Locate sdkmanager if present and accept licenses
+          SDKMANAGER=""
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          else
+            SDKMANAGER=$(find "$ANDROID_HOME" -name sdkmanager -type f -perm /111 2>/dev/null | head -n 1)
+          fi
+
+          if [ -n "$SDKMANAGER" ]; then
+            echo "Found sdkmanager at: $SDKMANAGER"
+            yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+            "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" > /dev/null 2>&1 || true
+          else
+            echo "sdkmanager not found in standard paths, relying on Gradle auto-download."
+          fi
+          echo "Android SDK setup complete."
 
       - name: Setup debug keystore
         run: |
           if [ -f debug.keystore.base64 ]; then
             base64 -d debug.keystore.base64 > debug.keystore
-          elif [ ! -f debug.keystore ]; then
+          fi
+          if [ ! -f debug.keystore ]; then
             keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
@@ -84,6 +109,7 @@ jobs:
             - 100% offline autonomous vertical reel explorer
             - Dual-mode: Deterministic Heuristic Engine + Local GGUF/LiteRT Model Import Slot
             - 32 bundled procedural video scenes with animated Canvas visuals
+            - AI BREAK Floating Companion with animated avatar states (idle, thinking, speaking, watching)
             - Dynamic Coder Agent personality evolution
             - Post-break debrief reports and Room SQLite persistence
 

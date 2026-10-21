@@ -213,6 +213,7 @@ fun RealDeviceSetupScreen(
 
             targetAppPresets.forEach { (appName, pkg) ->
                 val isSelected = config.targetPackage == pkg
+                val isInstalled = controller.isAppInstalled(pkg)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -228,7 +229,23 @@ fun RealDeviceSetupScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text(text = appName, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(text = appName, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isInstalled) "INSTALLED" else "BROWSER FALLBACK",
+                                    color = if (isInstalled) TerminalEmerald else TerminalAmber,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier
+                                        .background(
+                                            if (isInstalled) TerminalEmerald.copy(alpha = 0.15f) else TerminalAmber.copy(alpha = 0.15f),
+                                            RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
                             Text(text = pkg, color = TextMuted, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
                         }
                         if (isSelected) {
@@ -271,7 +288,7 @@ fun RealDeviceSetupScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "• Basic scrolling only. No automatic commenting, messaging, following, or buying.\n• No screen recording or video captures uploaded.\n• Cooldown: 6 seconds between scroll actions.",
+                        text = "• Basic scrolling only. No automatic commenting, messaging, following, or buying.\n• Cooldown: ${config.scrollCooldownSec}s between vertical scroll gestures.\n• Automatic stop when timer expires or manual stop.",
                         color = TextSecondary,
                         fontSize = 11.sp,
                         lineHeight = 16.sp
@@ -279,28 +296,68 @@ fun RealDeviceSetupScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Launch Button
-            Button(
-                onClick = {
-                    controller.setSessionActive(true)
-                    controller.launchTargetApp()
-                },
-                enabled = isServiceEnabled,
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = ObsidianBg),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag("launch_real_app_button")
-            ) {
-                Icon(imageVector = Icons.Default.Launch, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (isServiceEnabled) "LAUNCH ${config.targetAppName.uppercase()}" else "ENABLE ACCESSIBILITY FIRST",
-                    fontWeight = FontWeight.Bold
-                )
+            // Test Gesture Dispatch Button (Available if accessibility enabled)
+            if (isServiceEnabled) {
+                OutlinedButton(
+                    onClick = { controller.testScrollOnce() },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(46.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.AccessibilityNew, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("TEST SCROLL GESTURE DISPATCH", color = NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Launch / Stop Buttons
+            if (config.isSessionActive) {
+                Button(
+                    onClick = { controller.stopSession() },
+                    colors = ButtonDefaults.buttonColors(containerColor = TerminalRose, contentColor = ObsidianBg),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("stop_real_app_button")
+                ) {
+                    Text(
+                        text = "STOP ACTIVE SCROLL SESSION (${config.scrollCount} SCROLLED)",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                Button(
+                    onClick = {
+                        if (isServiceEnabled) {
+                            controller.startSession()
+                        } else {
+                            controller.openAccessibilitySettings()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isServiceEnabled) NeonCyan else TerminalAmber,
+                        contentColor = ObsidianBg
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .testTag("launch_real_app_button")
+                ) {
+                    Icon(
+                        imageVector = if (isServiceEnabled) Icons.Default.Launch else Icons.Default.Settings,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isServiceEnabled) "LAUNCH ${config.targetAppName.uppercase()} & START BREAK" else "TAP TO ENABLE ACCESSIBILITY FIRST",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(36.dp))

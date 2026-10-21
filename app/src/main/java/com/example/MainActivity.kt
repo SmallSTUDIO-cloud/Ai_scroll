@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -77,11 +79,17 @@ fun AiBreakApp(
     val currentModel by modelManagerViewModel.currentModel.collectAsStateWithLifecycle()
     val pastSessions by reportHistoryViewModel.allSessions.collectAsStateWithLifecycle()
 
-    NavHost(
-        navController = navController,
-        startDestination = Screen.Welcome.route,
-        modifier = Modifier.fillMaxSize()
-    ) {
+    val companionState by com.example.companion.FloatingCompanionController.companionState.collectAsStateWithLifecycle()
+    val provider by com.example.companion.FloatingCompanionController.selectedProvider.collectAsStateWithLifecycle()
+    val inAppBubbleEnabled by com.example.companion.FloatingCompanionController.inAppBubbleEnabled.collectAsStateWithLifecycle()
+    val isSheetExpanded by com.example.companion.FloatingCompanionController.isSheetExpanded.collectAsStateWithLifecycle()
+
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Welcome.route,
+            modifier = Modifier.fillMaxSize()
+        ) {
         composable(Screen.Welcome.route) {
             WelcomeScreen(
                 onEnterDashboard = {
@@ -191,4 +199,41 @@ fun AiBreakApp(
             )
         }
     }
+
+    // Draggable floating companion avatar directly on screen
+    if (inAppBubbleEnabled && !isSheetExpanded) {
+        com.example.companion.ui.DraggableCompanionAvatar(
+            state = companionState,
+            providerLabel = provider.displayName,
+            onClick = {
+                com.example.companion.FloatingCompanionController.setSheetExpanded(true)
+            }
+        )
+    }
+
+    // Slide-up Companion Chat Sheet
+    if (isSheetExpanded) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f))
+                .clickable { com.example.companion.FloatingCompanionController.setSheetExpanded(false) }
+        ) {
+            com.example.companion.ui.CompanionInteractionSheet(
+                onDismiss = { com.example.companion.FloatingCompanionController.setSheetExpanded(false) },
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.BottomCenter)
+            )
+        }
+    }
+    }
+
+    // Sync profile to floating companion
+    androidx.compose.runtime.LaunchedEffect(currentProfile) {
+        if (currentProfile != null) {
+            com.example.companion.FloatingCompanionController.updateActiveProfile(currentProfile!!)
+        }
+    }
 }
+
+
