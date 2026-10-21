@@ -1,10 +1,13 @@
 package com.example.companion
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import com.example.companion.engine.ConversationBrain
 import com.example.companion.engine.HeuristicConversationBrain
 import com.example.companion.engine.RemoteModelBrain
@@ -14,6 +17,7 @@ import com.example.companion.model.CompanionState
 import com.example.companion.model.MessageSender
 import com.example.companion.service.FloatingCompanionService
 import com.example.model.PersonalityProfile
+import com.example.service.AiBreakAccessibilityService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -21,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 object FloatingCompanionController {
 
@@ -38,6 +43,15 @@ object FloatingCompanionController {
     private val _inAppBubbleEnabled = MutableStateFlow(true)
     val inAppBubbleEnabled: StateFlow<Boolean> = _inAppBubbleEnabled.asStateFlow()
 
+    private val _isOverlayPopupVisible = MutableStateFlow(false)
+    val isOverlayPopupVisible: StateFlow<Boolean> = _isOverlayPopupVisible.asStateFlow()
+
+    private val _currentThought = MutableStateFlow("Exploring the algorithmic feed like a human...")
+    val currentThought: StateFlow<String> = _currentThought.asStateFlow()
+
+    private val _isProcrastinating = MutableStateFlow(false)
+    val isProcrastinating: StateFlow<Boolean> = _isProcrastinating.asStateFlow()
+
     private val _messages = MutableStateFlow<List<CompanionMessage>>(
         listOf(
             CompanionMessage(
@@ -48,7 +62,7 @@ object FloatingCompanionController {
     )
     val messages: StateFlow<List<CompanionMessage>> = _messages.asStateFlow()
 
-    private val _currentScreenContext = MutableStateFlow<String?>("James Webb Space Telescope Primordial Galaxy")
+    private val _currentScreenContext = MutableStateFlow<String?>("Trending Social Feed")
     val currentScreenContext: StateFlow<String?> = _currentScreenContext.asStateFlow()
 
     private val _isSheetExpanded = MutableStateFlow(false)
@@ -80,6 +94,18 @@ object FloatingCompanionController {
 
     fun setSheetExpanded(expanded: Boolean) {
         _isSheetExpanded.value = expanded
+    }
+
+    fun toggleOverlayPopup() {
+        _isOverlayPopupVisible.value = !_isOverlayPopupVisible.value
+    }
+
+    fun setOverlayPopupVisible(visible: Boolean) {
+        _isOverlayPopupVisible.value = visible
+    }
+
+    fun updateThought(thought: String) {
+        _currentThought.value = thought
     }
 
     fun setInAppBubbleEnabled(enabled: Boolean) {
@@ -124,15 +150,15 @@ object FloatingCompanionController {
     }
 
     fun explainCurrentScreen() {
-        val contextSnippet = _currentScreenContext.value ?: "General Feed Screen"
+        val contextSnippet = _currentScreenContext.value ?: "Trending Social Reel"
         _companionState.value = CompanionState.ANALYZING_SCREEN
 
         scope.launch {
             delay(800)
             val explanation = activeBrain.explainReel(
                 reelTitle = contextSnippet,
-                category = "technology",
-                description = "Observing on-screen UI metadata and reel tags.",
+                category = "social_feed",
+                description = "Observing on-screen UI metadata, creator context, and reel tags.",
                 personality = activeProfile
             )
             _messages.value = _messages.value + CompanionMessage(
@@ -140,6 +166,7 @@ object FloatingCompanionController {
                 text = explanation,
                 reelContext = contextSnippet
             )
+            _currentThought.value = "Analyzed: ${explanation.take(60)}..."
             _companionState.value = CompanionState.SPEAKING
             delay(1500)
             _companionState.value = CompanionState.IDLE
@@ -161,6 +188,93 @@ object FloatingCompanionController {
             )
             _companionState.value = CompanionState.IDLE
         }
+    }
+
+    fun triggerHumanNextReel(context: Context) {
+        val scrolled = AiBreakAccessibilityService.performScrollUpGesture()
+        val thoughts = listOf(
+            "Scrolling... Let's see what the algorithm cooks up next 👀",
+            "Swiped to next reel! The audio transitions on these are wild.",
+            "Checking out the next creator... vibes are good ✨",
+            "Next reel! Hoping for some high-IQ coding or cute animal clips 🐶",
+            "Algorithm is cooking today. Let's see the next short!"
+        )
+        val selectedThought = thoughts[Random.nextInt(thoughts.size)]
+        _currentThought.value = selectedThought
+        _companionState.value = CompanionState.CURIOUS
+
+        if (!scrolled) {
+            Toast.makeText(context, "Note: Enable 'AI BREAK Scroll Agent' in Accessibility for auto-scroll.", Toast.LENGTH_SHORT).show()
+        }
+
+        scope.launch {
+            delay(1200)
+            _companionState.value = CompanionState.IDLE
+        }
+    }
+
+    fun triggerHumanLikeReel(context: Context) {
+        val liked = AiBreakAccessibilityService.performDoubleTapLike()
+        val cuteThoughts = listOf(
+            "Double-tapped! This reel is adorable ❤️",
+            "Liked! The aesthetic & music on this is 10/10 ✨",
+            "Dropped a heart! Creator definitely understood the assignment.",
+            "Double-tap dispatched! W reel, algorithm got it right ❤️"
+        )
+        _currentThought.value = cuteThoughts[Random.nextInt(cuteThoughts.size)]
+        _companionState.value = CompanionState.HAPPY
+
+        if (liked) {
+            Toast.makeText(context, "❤️ Double-tapped to like reel!", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Double-tap gesture dispatched (Enable Accessibility for background control)", Toast.LENGTH_SHORT).show()
+        }
+
+        scope.launch {
+            delay(1500)
+            _companionState.value = CompanionState.IDLE
+        }
+    }
+
+    fun triggerStopWithProcrastination(context: Context, onStopped: () -> Unit = {}) {
+        _isProcrastinating.value = true
+        _companionState.value = CompanionState.CURIOUS
+        _currentThought.value = "Wait, bro! Just ONE MORE reel! This algorithm is too interesting... 👀"
+        Toast.makeText(context, "AI Companion: \"Wait, just ONE more reel!\"", Toast.LENGTH_SHORT).show()
+
+        scope.launch {
+            delay(2400)
+            // One final scroll!
+            AiBreakAccessibilityService.performScrollUpGesture()
+            delay(1500)
+            _currentThought.value = "Okay fine, taking a break now! Productive mode activated! 🚀"
+            _companionState.value = CompanionState.HAPPY
+            Toast.makeText(context, "AI BREAK session completed! Back to work 🚀", Toast.LENGTH_SHORT).show()
+            delay(1200)
+            _isProcrastinating.value = false
+            _companionState.value = CompanionState.IDLE
+            onStopped()
+        }
+    }
+
+    fun draftAndCopyComment(context: Context): String {
+        val profileName = activeProfile.name
+        val comments = listOf(
+            "Bro the ending caught me completely off guard 💀😭",
+            "Why is this actually so aesthetic though?? ✨ W creator!",
+            "Algorithm finally blessed my feed today 🔥",
+            "Okay but the transition was insanely clean, 10/10",
+            "Taking notes on this, genuinely impressive ✍️🔥",
+            "Not me watching this 5 times in a row 😭✨"
+        )
+        val selectedComment = comments[Random.nextInt(comments.size)]
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("AI BREAK Comment Draft", selectedComment)
+        clipboard.setPrimaryClip(clip)
+
+        _currentThought.value = "Drafted: \"$selectedComment\" (Copied to clipboard!)"
+        Toast.makeText(context, "📋 Comment copied: \"$selectedComment\"", Toast.LENGTH_LONG).show()
+        return selectedComment
     }
 
     fun clearMessages() {
@@ -199,14 +313,21 @@ object FloatingCompanionController {
     fun startCompanionService(context: Context) {
         if (!canDrawOverlays(context)) {
             requestOverlayPermission(context)
+            Toast.makeText(context, "Please allow 'Display over other apps' to float on Instagram and other apps.", Toast.LENGTH_LONG).show()
             return
         }
         val intent = Intent(context, FloatingCompanionService::class.java)
-        context.startService(intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
+        Toast.makeText(context, "AI Companion floating overlay activated!", Toast.LENGTH_SHORT).show()
     }
 
     fun stopCompanionService(context: Context) {
         val intent = Intent(context, FloatingCompanionService::class.java)
         context.stopService(intent)
+        Toast.makeText(context, "AI Companion overlay stopped.", Toast.LENGTH_SHORT).show()
     }
 }

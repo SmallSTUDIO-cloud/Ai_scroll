@@ -670,22 +670,31 @@ fun FloatingCompanionHubCard() {
             ) {
                 Button(
                     onClick = {
-                        com.example.companion.FloatingCompanionController.setSheetExpanded(true)
+                        if (!isRunning) {
+                            com.example.companion.FloatingCompanionController.startCompanionService(context)
+                        } else {
+                            com.example.companion.FloatingCompanionController.toggleOverlayPopup()
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = CyberCardBorder.copy(alpha = 0.7f),
-                        contentColor = TextPrimary
+                        containerColor = if (isRunning) NeonCyan else TerminalAmber,
+                        contentColor = ObsidianBg
                     ),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.weight(1f).testTag("open_companion_chat_button")
                 ) {
-                    Text("OPEN CHAT PANEL", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text(
+                        text = if (isRunning) "TOGGLE POPUP" else "FLOAT OVER APPS",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
 
                 Button(
                     onClick = {
                         com.example.companion.FloatingCompanionController.explainCurrentScreen()
-                        com.example.companion.FloatingCompanionController.setSheetExpanded(true)
+                        com.example.companion.FloatingCompanionController.setOverlayPopupVisible(true)
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = NeonCyan.copy(alpha = 0.15f),

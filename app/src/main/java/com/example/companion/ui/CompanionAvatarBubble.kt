@@ -1,16 +1,23 @@
 package com.example.companion.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,8 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +37,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -41,10 +45,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
+import com.example.companion.FloatingCompanionController
 import com.example.companion.model.CompanionState
-import com.example.ui.theme.CyberCardBorder
 import com.example.ui.theme.DeepMidnightNavy
 import com.example.ui.theme.ElectricBlue
 import com.example.ui.theme.NeonCyan
@@ -52,6 +56,7 @@ import com.example.ui.theme.ObsidianBg
 import com.example.ui.theme.TerminalAmber
 import com.example.ui.theme.TerminalEmerald
 import com.example.ui.theme.TerminalRose
+import kotlin.math.roundToInt
 
 @Composable
 fun CompanionAvatarBubble(
@@ -69,16 +74,6 @@ fun CompanionAvatarBubble(
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse_scale"
-    )
-
-    val haloRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "halo_rotation"
     )
 
     val stateColor = when (state) {
@@ -172,6 +167,7 @@ fun DraggableCompanionAvatar(
 ) {
     var offsetX by remember { mutableFloatStateOf(40f) }
     var offsetY by remember { mutableFloatStateOf(450f) }
+    val isPopupOpen by FloatingCompanionController.isOverlayPopupVisible.collectAsStateWithLifecycle()
 
     Box(
         modifier = modifier
@@ -184,11 +180,27 @@ fun DraggableCompanionAvatar(
                 }
             }
     ) {
-        CompanionAvatarBubble(
-            state = state,
-            providerLabel = providerLabel,
-            onClick = onClick
-        )
+        Column(horizontalAlignment = Alignment.End) {
+            CompanionAvatarBubble(
+                state = state,
+                providerLabel = providerLabel,
+                onClick = onClick
+            )
+
+            AnimatedVisibility(
+                visible = isPopupOpen,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CompactOverlayPopup(
+                        onDismiss = {
+                            FloatingCompanionController.setOverlayPopupVisible(false)
+                        }
+                    )
+                }
+            }
+        }
     }
 }
-

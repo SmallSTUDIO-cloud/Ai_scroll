@@ -206,7 +206,7 @@ fun AiBreakApp(
             state = companionState,
             providerLabel = provider.displayName,
             onClick = {
-                com.example.companion.FloatingCompanionController.setSheetExpanded(true)
+                com.example.companion.FloatingCompanionController.toggleOverlayPopup()
             }
         )
     }
