@@ -5,13 +5,20 @@ import com.example.companion.engine.HeuristicConversationBrain
 import com.example.companion.engine.RemoteModelBrain
 import com.example.companion.model.BrainProvider
 import com.example.companion.model.CompanionState
+import com.example.companion.ui.BubbleAccent
+import com.example.model.ExtractedReelInfo
 import com.example.model.PersonalityProfile
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
 class CompanionEngineTest {
 
     @Test
@@ -52,7 +59,6 @@ class CompanionEngineTest {
 
     @Test
     fun testRemoteModelBrainGracefulOfflineFallback() = runBlocking {
-        // When user hasn't configured an API key, it must cleanly fall back
         val remoteBrain = RemoteModelBrain(
             provider = BrainProvider.OPENAI,
             userApiKey = null
@@ -72,5 +78,41 @@ class CompanionEngineTest {
 
         FloatingCompanionController.setCompanionState(CompanionState.IDLE)
         assertEquals(CompanionState.IDLE, FloatingCompanionController.companionState.value)
+    }
+
+    @Test
+    fun testExtractedReelInfoSummaryAndHeuristics() {
+        val reel = ExtractedReelInfo(
+            packageName = "com.instagram.android",
+            appName = "Instagram",
+            creator = "tech_creator",
+            caption = "Building an ultra-fast Kotlin coroutines dispatcher for high throughput",
+            audioTitle = "Coding Beats Vol. 1",
+            rawVisibleTexts = listOf("tech_creator", "Follow", "Coding Beats Vol. 1"),
+            isTechOrCoding = true
+        )
+
+        val summary = reel.getSummary()
+        assertTrue(summary.contains("@tech_creator"))
+        assertTrue(summary.contains("Building an ultra-fast"))
+        assertTrue(reel.isTechOrCoding)
+    }
+
+    @Test
+    fun testShowComicBubbleAndDismiss() {
+        FloatingCompanionController.showComicBubble(
+            text = "Bro she is gorgeous... algorithm knows my taste 🤩✨",
+            emoji = "🤩",
+            tag = "INSTAGRAM",
+            accent = BubbleAccent.ROSE,
+            durationMs = 5000L
+        )
+
+        assertTrue(FloatingCompanionController.isComicBubbleVisible.value)
+        assertEquals("🤩", FloatingCompanionController.activeEmojiReaction.value)
+        assertEquals("Bro she is gorgeous... algorithm knows my taste 🤩✨", FloatingCompanionController.activeComicThought.value?.text)
+
+        FloatingCompanionController.dismissComicBubble()
+        org.junit.Assert.assertFalse(FloatingCompanionController.isComicBubbleVisible.value)
     }
 }

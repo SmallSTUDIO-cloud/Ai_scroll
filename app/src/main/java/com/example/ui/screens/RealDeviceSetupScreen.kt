@@ -68,6 +68,7 @@ fun RealDeviceSetupScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val config by controller.config.collectAsStateWithLifecycle()
     val isServiceEnabled by AiBreakAccessibilityService.isServiceEnabled.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
@@ -332,6 +333,7 @@ fun RealDeviceSetupScreen(
                 Button(
                     onClick = {
                         if (isServiceEnabled) {
+                            com.example.companion.FloatingCompanionController.startCompanionService(context)
                             controller.startSession()
                         } else {
                             controller.openAccessibilitySettings()

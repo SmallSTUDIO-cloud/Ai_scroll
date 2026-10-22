@@ -16,10 +16,14 @@ import com.example.companion.model.CompanionMessage
 import com.example.companion.model.CompanionState
 import com.example.companion.model.MessageSender
 import com.example.companion.service.FloatingCompanionService
+import com.example.companion.ui.BubbleAccent
+import com.example.companion.ui.ComicThought
+import com.example.model.ExtractedReelInfo
 import com.example.model.PersonalityProfile
 import com.example.service.AiBreakAccessibilityService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +34,8 @@ import kotlin.random.Random
 object FloatingCompanionController {
 
     private val scope = CoroutineScope(Dispatchers.Main)
+    private var comicBubbleDismissJob: Job? = null
+    private var commentInspectionJob: Job? = null
 
     private val _isServiceRunning = MutableStateFlow(false)
     val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
@@ -49,14 +55,37 @@ object FloatingCompanionController {
     private val _currentThought = MutableStateFlow("Exploring the algorithmic feed like a human...")
     val currentThought: StateFlow<String> = _currentThought.asStateFlow()
 
+    // Lively Pop-Out Comic Bubble & Emoji state
+    private val _activeComicThought = MutableStateFlow<ComicThought?>(null)
+    val activeComicThought: StateFlow<ComicThought?> = _activeComicThought.asStateFlow()
+
+    private val _isComicBubbleVisible = MutableStateFlow(false)
+    val isComicBubbleVisible: StateFlow<Boolean> = _isComicBubbleVisible.asStateFlow()
+
+    private val _activeEmojiReaction = MutableStateFlow<String?>("✨")
+    val activeEmojiReaction: StateFlow<String?> = _activeEmojiReaction.asStateFlow()
+
+    private val _lastExtractedReel = MutableStateFlow<ExtractedReelInfo?>(null)
+    val lastExtractedReel: StateFlow<ExtractedReelInfo?> = _lastExtractedReel.asStateFlow()
+
     private val _isProcrastinating = MutableStateFlow(false)
     val isProcrastinating: StateFlow<Boolean> = _isProcrastinating.asStateFlow()
+
+    private val _isReadingComments = MutableStateFlow(false)
+    val isReadingComments: StateFlow<Boolean> = _isReadingComments.asStateFlow()
+
+    // Counters for human-like cadence (~1 like every 8-12 reels, ~1 comment read every 10-15 reels)
+    private var reelsSinceLastLike = 0
+    private var targetLikeInterval = Random.nextInt(8, 12)
+
+    private var reelsSinceLastComment = 0
+    private var targetCommentInterval = Random.nextInt(10, 15)
 
     private val _messages = MutableStateFlow<List<CompanionMessage>>(
         listOf(
             CompanionMessage(
                 sender = MessageSender.COMPANION,
-                text = "Hello! I am your AI BREAK companion. Tap 'Explain Reel' or ask me anything as we scroll."
+                text = "Hello! I am your AI BREAK companion. I watch reels with you, read captions, and give live feedback!"
             )
         )
     )
@@ -67,9 +96,6 @@ object FloatingCompanionController {
 
     private val _isSheetExpanded = MutableStateFlow(false)
     val isSheetExpanded: StateFlow<Boolean> = _isSheetExpanded.asStateFlow()
-
-    private val _isSpeaking = MutableStateFlow(false)
-    val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
     private var activeProfile: PersonalityProfile = PersonalityProfile.PRESET_TECH_NERD
 
@@ -98,10 +124,17 @@ object FloatingCompanionController {
 
     fun toggleOverlayPopup() {
         _isOverlayPopupVisible.value = !_isOverlayPopupVisible.value
+        if (_isOverlayPopupVisible.value) {
+            // Dismiss comic bubble when full popup opens
+            _isComicBubbleVisible.value = false
+        }
     }
 
     fun setOverlayPopupVisible(visible: Boolean) {
         _isOverlayPopupVisible.value = visible
+        if (visible) {
+            _isComicBubbleVisible.value = false
+        }
     }
 
     fun updateThought(thought: String) {
@@ -114,6 +147,36 @@ object FloatingCompanionController {
 
     fun updateScreenContext(contextSnippet: String?) {
         _currentScreenContext.value = contextSnippet
+    }
+
+    fun showComicBubble(
+        text: String,
+        emoji: String = "👀",
+        tag: String = "REEL BOT",
+        accent: BubbleAccent = BubbleAccent.CYAN,
+        durationMs: Long = 3800L
+    ) {
+        val thought = ComicThought(
+            text = text,
+            emoji = emoji,
+            tag = tag,
+            accentType = accent
+        )
+        _activeComicThought.value = thought
+        _activeEmojiReaction.value = emoji
+        _currentThought.value = text
+        _isComicBubbleVisible.value = true
+
+        comicBubbleDismissJob?.cancel()
+        comicBubbleDismissJob = scope.launch {
+            delay(durationMs)
+            _isComicBubbleVisible.value = false
+        }
+    }
+
+    fun dismissComicBubble() {
+        comicBubbleDismissJob?.cancel()
+        _isComicBubbleVisible.value = false
     }
 
     fun setProvider(provider: BrainProvider, userApiKey: String? = null) {
@@ -133,7 +196,7 @@ object FloatingCompanionController {
         _companionState.value = CompanionState.THINKING
 
         scope.launch {
-            delay(600) // Small natural thinking delay
+            delay(500)
             val replyText = activeBrain.respondToQuery(
                 userQuery = userText,
                 screenContext = _currentScreenContext.value,
@@ -144,31 +207,308 @@ object FloatingCompanionController {
                 text = replyText
             )
             _companionState.value = CompanionState.SPEAKING
+            showComicBubble(
+                text = replyText.take(75),
+                emoji = "💬",
+                tag = "COMPANION",
+                accent = BubbleAccent.CYAN
+            )
             delay(1500)
             _companionState.value = CompanionState.IDLE
         }
     }
 
+    /**
+     * Inspects the active screen in real-time, extracts text & metadata,
+     * and generates an authentic, lively human-like reaction.
+     */
+    fun perceiveAndReactToScreen(context: Context) {
+        val reelInfo = AiBreakAccessibilityService.extractCurrentReel()
+        if (reelInfo != null) {
+            _lastExtractedReel.value = reelInfo
+            val summary = reelInfo.getSummary()
+            _currentScreenContext.value = summary
+
+            val (thoughtText, emoji, accent, state) = when {
+                // User requirement: Attracted to cute/beautiful girls videos
+                reelInfo.isLikelyGirlOrAesthetic -> {
+                    val girlThoughts = listOf(
+                        "Bro she is gorgeous... algorithm definitely locked in on my taste 🤩✨",
+                        "Wait her aesthetic and outfit is actually 10/10! Unreal ✨",
+                        "Okay she is stunning! Definitely giving this one a heart ❤️",
+                        "The vibe here is immaculate. Peak algorithm recommendation 🤩"
+                    )
+                    Quadruple(
+                        girlThoughts[Random.nextInt(girlThoughts.size)],
+                        "🤩",
+                        BubbleAccent.ROSE,
+                        CompanionState.HAPPY
+                    )
+                }
+
+                // Humorous or meme content
+                reelInfo.isHumorOrMeme -> {
+                    val memeThoughts = listOf(
+                        "LMAOO the punchline caught me completely off guard 💀😭",
+                        "Why is this actually so unhinged though 💀",
+                        "Bro who let them cook this meme?? 10/10 😂",
+                        "I am crying at this edit fr 💀😂"
+                    )
+                    Quadruple(
+                        memeThoughts[Random.nextInt(memeThoughts.size)],
+                        "😂",
+                        BubbleAccent.AMBER,
+                        CompanionState.HAPPY
+                    )
+                }
+
+                // Coding / Tech content
+                reelInfo.isTechOrCoding -> {
+                    val techThoughts = listOf(
+                        "Clean dev setup! Taking notes on this workflow 💻🧠",
+                        "High signal-to-noise ratio here. Solid engineering insight.",
+                        "That keyboard and terminal setup is clean though 🔥",
+                        "Compiler optimization trick spotted! High IQ content 🧠"
+                    )
+                    Quadruple(
+                        techThoughts[Random.nextInt(techThoughts.size)],
+                        "🧠",
+                        BubbleAccent.BLUE,
+                        CompanionState.CURIOUS
+                    )
+                }
+
+                // Music / Dance content
+                reelInfo.isMusicOrDance -> {
+                    val musicThoughts = listOf(
+                        "This audio has been stuck in my head all day 🎶🔥",
+                        "The transition on this beat drop was insanely clean ✨",
+                        "Vibes on this reel are unmatched! 🎵"
+                    )
+                    Quadruple(
+                        musicThoughts[Random.nextInt(musicThoughts.size)],
+                        "🔥",
+                        BubbleAccent.EMERALD,
+                        CompanionState.CURIOUS
+                    )
+                }
+
+                // Specific creator detected
+                !reelInfo.creator.isNullOrBlank() -> {
+                    val creatorThoughts = listOf(
+                        "@${reelInfo.creator} consistently produces fire edits! 👀",
+                        "Checking out @${reelInfo.creator}'s reel... looks promising ✨",
+                        "@${reelInfo.creator} understood the assignment 🔥"
+                    )
+                    Quadruple(
+                        creatorThoughts[Random.nextInt(creatorThoughts.size)],
+                        "👀",
+                        BubbleAccent.CYAN,
+                        CompanionState.CURIOUS
+                    )
+                }
+
+                // Caption snippet available
+                !reelInfo.caption.isNullOrBlank() -> {
+                    val capSnippet = reelInfo.caption.take(45)
+                    Quadruple(
+                        "Observing: \"$capSnippet...\" Interesting topic! 👀",
+                        "✨",
+                        BubbleAccent.CYAN,
+                        CompanionState.CURIOUS
+                    )
+                }
+
+                else -> {
+                    val genericThoughts = listOf(
+                        "Exploring the algorithmic feed like a human... 👀",
+                        "Next reel! Let's see what the feed recommends ✨",
+                        "Observing video pacing and audio sync... vibes are good."
+                    )
+                    Quadruple(
+                        genericThoughts[Random.nextInt(genericThoughts.size)],
+                        "👀",
+                        BubbleAccent.CYAN,
+                        CompanionState.IDLE
+                    )
+                }
+            }
+
+            _companionState.value = state
+            showComicBubble(
+                text = thoughtText,
+                emoji = emoji,
+                tag = reelInfo.appName.uppercase(),
+                accent = accent
+            )
+
+            scope.launch {
+                delay(2000)
+                if (_companionState.value == state) {
+                    _companionState.value = CompanionState.IDLE
+                }
+            }
+        }
+    }
+
+    private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
+    /**
+     * Called whenever a reel is swiped (either manually or during an autonomous session).
+     * Handles perception, autonomous likes (~1 in 10), and comment inspection (~1 in 12).
+     */
+    fun onReelSwiped(context: Context) {
+        reelsSinceLastLike++
+        reelsSinceLastComment++
+
+        scope.launch {
+            // Give the new reel video ~1.8 seconds to load on screen
+            delay(1800)
+
+            // 1. Perceive screen content and pop thought bubble
+            perceiveAndReactToScreen(context)
+
+            // 2. Check like cadence (~1 in 8-12 reels)
+            if (reelsSinceLastLike >= targetLikeInterval) {
+                delay(1200)
+                reelsSinceLastLike = 0
+                targetLikeInterval = Random.nextInt(8, 12)
+                triggerHumanLikeReel(context)
+                return@launch
+            }
+
+            // 3. Check comment reading cadence (~1 in 10-15 reels)
+            if (reelsSinceLastComment >= targetCommentInterval && !_isReadingComments.value) {
+                delay(1400)
+                reelsSinceLastComment = 0
+                targetCommentInterval = Random.nextInt(10, 15)
+                triggerInspectAndReadComments(context)
+            }
+        }
+    }
+
+    /**
+     * Autonomously opens the comment section, scans visible comment nodes,
+     * reacts expressively, and closes the drawer.
+     */
+    fun triggerInspectAndReadComments(context: Context) {
+        if (_isReadingComments.value) return
+        _isReadingComments.value = true
+
+        commentInspectionJob?.cancel()
+        commentInspectionJob = scope.launch {
+            _companionState.value = CompanionState.CURIOUS
+            showComicBubble(
+                text = "Checking what the comments are saying... 👀",
+                emoji = "👀",
+                tag = "COMMENTS",
+                accent = BubbleAccent.AMBER,
+                durationMs = 2500L
+            )
+
+            // 1. Open comment drawer
+            val opened = AiBreakAccessibilityService.openComments()
+            if (!opened) {
+                _isReadingComments.value = false
+                return@launch
+            }
+
+            // 2. Allow bottom sheet animation to settle
+            delay(1400)
+
+            // 3. Read top comment texts
+            val comments = AiBreakAccessibilityService.readTopComments()
+            if (comments.isNotEmpty()) {
+                val topComment = comments.first()
+                val topLower = topComment.lowercase()
+
+                val (commentReaction, emoji) = when {
+                    topLower.contains("💀") || topLower.contains("nah") || topLower.contains("bro") || topLower.contains("wild") -> {
+                        Pair("Bro the top comment is ruthless: \"${topComment.take(45)}\" 💀", "💀")
+                    }
+                    topLower.contains("😂") || topLower.contains("lmao") || topLower.contains("lol") -> {
+                        Pair("Top comment got me crying: \"${topComment.take(45)}\" 😂", "😂")
+                    }
+                    topLower.contains("❤️") || topLower.contains("gorgeous") || topLower.contains("beautiful") -> {
+                        Pair("Comments agreeing she is stunning: \"${topComment.take(45)}\" 🤩", "🤩")
+                    }
+                    else -> {
+                        Pair("Top comment said: \"${topComment.take(50)}\" 💬", "💬")
+                    }
+                }
+
+                _companionState.value = CompanionState.HAPPY
+                showComicBubble(
+                    text = commentReaction,
+                    emoji = emoji,
+                    tag = "TOP COMMENT",
+                    accent = BubbleAccent.ROSE,
+                    durationMs = 3500L
+                )
+            } else {
+                showComicBubble(
+                    text = "Comments look quiet here! Scrolling back to video... 👀",
+                    emoji = "👀",
+                    tag = "COMMENTS",
+                    accent = BubbleAccent.CYAN,
+                    durationMs = 2500L
+                )
+            }
+
+            // 4. Linger so user can also glance at comments
+            delay(2200)
+
+            // 5. Close comments
+            AiBreakAccessibilityService.closeComments()
+            delay(600)
+
+            _isReadingComments.value = false
+            _companionState.value = CompanionState.IDLE
+        }
+    }
+
     fun explainCurrentScreen() {
-        val contextSnippet = _currentScreenContext.value ?: "Trending Social Reel"
+        val reel = _lastExtractedReel.value ?: AiBreakAccessibilityService.extractCurrentReel()
+        val contextSnippet = reel?.getSummary() ?: _currentScreenContext.value ?: "Trending Social Reel"
         _companionState.value = CompanionState.ANALYZING_SCREEN
 
         scope.launch {
-            delay(800)
+            showComicBubble(
+                text = "Analyzing reel audio, creator, and caption nodes... 🧠",
+                emoji = "🧠",
+                tag = "ANALYZING",
+                accent = BubbleAccent.CYAN,
+                durationMs = 2000L
+            )
+            delay(900)
+
             val explanation = activeBrain.explainReel(
                 reelTitle = contextSnippet,
-                category = "social_feed",
-                description = "Observing on-screen UI metadata, creator context, and reel tags.",
+                category = when {
+                    reel?.isTechOrCoding == true -> "coding"
+                    reel?.isHumorOrMeme == true -> "comedy"
+                    else -> "social_feed"
+                },
+                description = reel?.caption ?: "Observing active screen metadata and video context.",
                 personality = activeProfile
             )
+
             _messages.value = _messages.value + CompanionMessage(
                 sender = MessageSender.COMPANION,
                 text = explanation,
                 reelContext = contextSnippet
             )
-            _currentThought.value = "Analyzed: ${explanation.take(60)}..."
+
             _companionState.value = CompanionState.SPEAKING
-            delay(1500)
+            showComicBubble(
+                text = explanation.take(80) + "...",
+                emoji = "💡",
+                tag = "EXPLANATION",
+                accent = BubbleAccent.EMERALD,
+                durationMs = 4500L
+            )
+
+            delay(2500)
             _companionState.value = CompanionState.IDLE
         }
     }
@@ -186,43 +526,43 @@ object FloatingCompanionController {
                 reelContext = contextSnippet,
                 isDraftReply = true
             )
+            showComicBubble(
+                text = "Drafted reply: \"$draft\"",
+                emoji = "✍️",
+                tag = "DRAFT",
+                accent = BubbleAccent.BLUE,
+                durationMs = 3500L
+            )
             _companionState.value = CompanionState.IDLE
         }
     }
 
     fun triggerHumanNextReel(context: Context) {
         val scrolled = AiBreakAccessibilityService.performScrollUpGesture()
-        val thoughts = listOf(
-            "Scrolling... Let's see what the algorithm cooks up next 👀",
-            "Swiped to next reel! The audio transitions on these are wild.",
-            "Checking out the next creator... vibes are good ✨",
-            "Next reel! Hoping for some high-IQ coding or cute animal clips 🐶",
-            "Algorithm is cooking today. Let's see the next short!"
-        )
-        val selectedThought = thoughts[Random.nextInt(thoughts.size)]
-        _currentThought.value = selectedThought
-        _companionState.value = CompanionState.CURIOUS
+        onReelSwiped(context)
 
         if (!scrolled) {
             Toast.makeText(context, "Note: Enable 'AI BREAK Scroll Agent' in Accessibility for auto-scroll.", Toast.LENGTH_SHORT).show()
-        }
-
-        scope.launch {
-            delay(1200)
-            _companionState.value = CompanionState.IDLE
         }
     }
 
     fun triggerHumanLikeReel(context: Context) {
         val liked = AiBreakAccessibilityService.performDoubleTapLike()
         val cuteThoughts = listOf(
-            "Double-tapped! This reel is adorable ❤️",
-            "Liked! The aesthetic & music on this is 10/10 ✨",
-            "Dropped a heart! Creator definitely understood the assignment.",
+            "Double-tapped! Definitely deserved that like ❤️",
+            "Liked! The aesthetic & vibes on this are 10/10 ✨",
+            "Dropped a heart! Creator understood the assignment ❤️",
             "Double-tap dispatched! W reel, algorithm got it right ❤️"
         )
-        _currentThought.value = cuteThoughts[Random.nextInt(cuteThoughts.size)]
+        val thought = cuteThoughts[Random.nextInt(cuteThoughts.size)]
         _companionState.value = CompanionState.HAPPY
+        showComicBubble(
+            text = thought,
+            emoji = "❤️",
+            tag = "LIKED",
+            accent = BubbleAccent.ROSE,
+            durationMs = 3200L
+        )
 
         if (liked) {
             Toast.makeText(context, "❤️ Double-tapped to like reel!", Toast.LENGTH_SHORT).show()
@@ -232,14 +572,22 @@ object FloatingCompanionController {
 
         scope.launch {
             delay(1500)
-            _companionState.value = CompanionState.IDLE
+            if (_companionState.value == CompanionState.HAPPY) {
+                _companionState.value = CompanionState.IDLE
+            }
         }
     }
 
     fun triggerStopWithProcrastination(context: Context, onStopped: () -> Unit = {}) {
         _isProcrastinating.value = true
         _companionState.value = CompanionState.CURIOUS
-        _currentThought.value = "Wait, bro! Just ONE MORE reel! This algorithm is too interesting... 👀"
+        showComicBubble(
+            text = "Wait bro! Just ONE MORE reel! This algorithm is too good... 👀",
+            emoji = "👀",
+            tag = "ONE MORE REEL",
+            accent = BubbleAccent.AMBER,
+            durationMs = 2800L
+        )
         Toast.makeText(context, "AI Companion: \"Wait, just ONE more reel!\"", Toast.LENGTH_SHORT).show()
 
         scope.launch {
@@ -247,7 +595,13 @@ object FloatingCompanionController {
             // One final scroll!
             AiBreakAccessibilityService.performScrollUpGesture()
             delay(1500)
-            _currentThought.value = "Okay fine, taking a break now! Productive mode activated! 🚀"
+            showComicBubble(
+                text = "Okay fine, taking a break now! Productive mode activated! 🚀",
+                emoji = "🚀",
+                tag = "BREAK TIME",
+                accent = BubbleAccent.EMERALD,
+                durationMs = 2500L
+            )
             _companionState.value = CompanionState.HAPPY
             Toast.makeText(context, "AI BREAK session completed! Back to work 🚀", Toast.LENGTH_SHORT).show()
             delay(1200)
@@ -258,7 +612,6 @@ object FloatingCompanionController {
     }
 
     fun draftAndCopyComment(context: Context): String {
-        val profileName = activeProfile.name
         val comments = listOf(
             "Bro the ending caught me completely off guard 💀😭",
             "Why is this actually so aesthetic though?? ✨ W creator!",
@@ -272,7 +625,13 @@ object FloatingCompanionController {
         val clip = ClipData.newPlainText("AI BREAK Comment Draft", selectedComment)
         clipboard.setPrimaryClip(clip)
 
-        _currentThought.value = "Drafted: \"$selectedComment\" (Copied to clipboard!)"
+        showComicBubble(
+            text = "Copied to clipboard: \"$selectedComment\"",
+            emoji = "📋",
+            tag = "CLIPBOARD",
+            accent = BubbleAccent.BLUE,
+            durationMs = 3000L
+        )
         Toast.makeText(context, "📋 Comment copied: \"$selectedComment\"", Toast.LENGTH_LONG).show()
         return selectedComment
     }

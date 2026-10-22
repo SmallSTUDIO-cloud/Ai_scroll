@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -62,15 +63,16 @@ import kotlin.math.roundToInt
 fun CompanionAvatarBubble(
     state: CompanionState,
     providerLabel: String,
+    activeEmoji: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "avatar_anim")
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.04f,
+        initialValue = 0.95f,
+        targetValue = 1.05f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
+            animation = tween(1100, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse_scale"
@@ -82,26 +84,26 @@ fun CompanionAvatarBubble(
         CompanionState.THINKING -> ElectricBlue
         CompanionState.ANALYZING_SCREEN -> TerminalEmerald
         CompanionState.SPEAKING -> NeonCyan
-        CompanionState.HAPPY -> TerminalEmerald
-        CompanionState.CURIOUS -> ElectricBlue
+        CompanionState.HAPPY -> TerminalRose
+        CompanionState.CURIOUS -> TerminalAmber
         CompanionState.ERROR -> TerminalRose
     }
 
     Box(
         modifier = modifier
-            .size(72.dp)
+            .size(76.dp)
             .scale(if (state == CompanionState.IDLE) pulseScale else 1.0f)
             .clip(CircleShape)
             .background(
                 Brush.radialGradient(
                     colors = listOf(
-                        stateColor.copy(alpha = 0.25f),
+                        stateColor.copy(alpha = 0.35f),
                         DeepMidnightNavy.copy(alpha = 0.95f),
                         ObsidianBg
                     )
                 )
             )
-            .border(2.dp, stateColor, CircleShape)
+            .border(2.2.dp, stateColor, CircleShape)
             .clickable { onClick() }
             .testTag("companion_avatar_bubble"),
         contentAlignment = Alignment.Center
@@ -111,7 +113,7 @@ fun CompanionAvatarBubble(
             painter = painterResource(id = R.drawable.companion_avatar),
             contentDescription = "AI BREAK Companion Avatar (${state.displayName})",
             modifier = Modifier
-                .size(50.dp)
+                .size(54.dp)
                 .clip(CircleShape)
         )
 
@@ -120,9 +122,9 @@ fun CompanionAvatarBubble(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .offset(y = (-2).dp)
-                .background(ObsidianBg.copy(alpha = 0.85f), CircleShape)
-                .border(0.6.dp, stateColor, CircleShape)
-                .padding(horizontal = 4.dp, vertical = 1.dp)
+                .background(ObsidianBg.copy(alpha = 0.88f), CircleShape)
+                .border(0.8.dp, stateColor, CircleShape)
+                .padding(horizontal = 5.dp, vertical = 1.dp)
         ) {
             Text(
                 text = state.displayName.take(7).uppercase(),
@@ -133,26 +135,55 @@ fun CompanionAvatarBubble(
             )
         }
 
+        // Animated Expression Emoji Badge at top left (e.g. ❤️, 🤩, 💀, 😂)
+        if (!activeEmoji.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = 2.dp, y = 2.dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(ObsidianBg.copy(alpha = 0.9f))
+                    .border(1.2.dp, stateColor, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = activeEmoji,
+                    fontSize = 13.sp
+                )
+            }
+        }
+
         // Active State Icon Accent at top right
         if (state == CompanionState.LISTENING) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .size(16.dp)
+                    .size(18.dp)
                     .background(TerminalAmber, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(imageVector = Icons.Default.Mic, contentDescription = null, tint = ObsidianBg, modifier = Modifier.size(10.dp))
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = null,
+                    tint = ObsidianBg,
+                    modifier = Modifier.size(11.dp)
+                )
             }
-        } else if (state == CompanionState.THINKING) {
+        } else if (state == CompanionState.THINKING || state == CompanionState.ANALYZING_SCREEN) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .size(16.dp)
+                    .size(18.dp)
                     .background(ElectricBlue, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(imageVector = Icons.Default.Psychology, contentDescription = null, tint = ObsidianBg, modifier = Modifier.size(10.dp))
+                Icon(
+                    imageVector = Icons.Default.Psychology,
+                    contentDescription = null,
+                    tint = ObsidianBg,
+                    modifier = Modifier.size(11.dp)
+                )
             }
         }
     }
@@ -168,6 +199,9 @@ fun DraggableCompanionAvatar(
     var offsetX by remember { mutableFloatStateOf(40f) }
     var offsetY by remember { mutableFloatStateOf(450f) }
     val isPopupOpen by FloatingCompanionController.isOverlayPopupVisible.collectAsStateWithLifecycle()
+    val activeComicThought by FloatingCompanionController.activeComicThought.collectAsStateWithLifecycle()
+    val isComicBubbleVisible by FloatingCompanionController.isComicBubbleVisible.collectAsStateWithLifecycle()
+    val activeEmoji by FloatingCompanionController.activeEmojiReaction.collectAsStateWithLifecycle()
 
     Box(
         modifier = modifier
@@ -181,9 +215,18 @@ fun DraggableCompanionAvatar(
             }
     ) {
         Column(horizontalAlignment = Alignment.End) {
+            PopOutComicBubble(
+                thought = activeComicThought,
+                visible = isComicBubbleVisible && !isPopupOpen,
+                onClick = onClick
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
             CompanionAvatarBubble(
                 state = state,
                 providerLabel = providerLabel,
+                activeEmoji = activeEmoji,
                 onClick = onClick
             )
 

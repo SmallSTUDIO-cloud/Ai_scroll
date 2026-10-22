@@ -1,94 +1,144 @@
-# AI BREAK — Floating System Companion & External App Overlay Plan
+# Lively AI Companion with Real Reel Perception & Comment Engagement
 
-> **Tagline:** "Your AI works hard. Let it scroll."
+Transform the floating AI companion bubble into an active, lively, and reactive entity that observes real background reels (Instagram, YouTube Shorts, TikTok, Reddit), displays dynamic pop-out comic speech bubbles, periodically auto-likes reels (~1 in 10), and autonomously opens, inspects, and reacts to top comment threads.
 
-This plan specifies the implementation of the **AI BREAK System Floating Companion**: a persistent, free-floating avatar bubble that hovers above other apps (Instagram, YouTube Shorts, Reddit, TikTok, Home Screen) using Android's `WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY`. It introduces a compact floating in-place popup, human-like variable scrolling dynamics, playful procrastination quirks ("just one more reel!"), and simulated like/comment drafting.
+## User Review & Critical Decisions
 
----
-
-## Confirmed User Preferences & Decisions
-
-- **Confirmed Decision 1 (Compact In-Place Popup):** Tapping the floating avatar over other apps opens a compact, floating popup dialog right above the current app—never kicking the user out of Instagram or Shorts.
-- **Confirmed Decision 2 (Human-Like Scrolling & Quirks):**
-  - **Dynamic Human Dwell:** Instead of robotic fixed intervals, the agent pauses for variable realistic intervals (3s–12s) based on perceived interest.
-  - **Procrastination Reflex:** When issued a "Stop" command, the companion playfully protests with a human-like reaction: *"Wait, just ONE more reel! It's too interesting..."* before gracefully halting.
-  - **Emotional / Attracted Quips:** Entertaining internal monologue and reactions for cute/aesthetic reels, viral dances, and tech breakthroughs, with draft comment proposals.
-  - **Simulated Engagement Gestures:** Double-tap center gesture for likes via `AccessibilityService`.
-- **Confirmed Decision 3 (Free-Floating Placement):** The companion avatar bubble can be dragged and positioned anywhere on screen without automatic edge snapping, staying wherever the user leaves it.
+> [!IMPORTANT]
+> The following architectural decisions were confirmed based on user feedback:
+> - **Visual Expression**: Pop-out comic speech bubble with animated emoji reactions attached to the floating avatar.
+> - **Reel Perception**: Direct on-screen text, creator handle, audio title, and caption extraction via Android Accessibility node hierarchy traversal (`rootInActiveWindow`). Zero extra permissions and 100% real-time on-device privacy.
+> - **Comment Automation**: Autonomous comment inspection cycle: taps the comment button node, pauses to scan top comment texts, reacts with a lively thought, and performs a native back gesture to resume smooth scrolling.
+> - **Natural Cadence**: Likes dispatched every ~8–12 reels (via center double-tap), comments inspected every ~10–15 reels.
 
 ---
 
-## 1. System Architecture
+## 1. Overview & Core Concept
+
+- **What It Does**: As the user watches reels or runs autonomous AI scroll sessions on Instagram, YouTube Shorts, or TikTok, the floating companion avatar actively reacts in real-time. It displays humorous or aesthetic speech bubbles, reacts with expressive animated emojis (❤️, 😂, 💀, 🤩), double-taps to like ~1 in 10 reels, and occasionally opens the comment section, reads what other people are saying, gasps/laughs, and closes the comments.
+- **Target Audience**: Users enjoying short-form video breaks who want an interactive, companionate experience that feels like watching reels with a quirky, fun friend.
+- **Key Value**: Replaces a passive static widget with an intelligent, expressive companion that actually understands and engages with live content on the screen.
+
+---
+
+## 2. User Experience & Visual Design
+
+### Key User Flows
+
+1. **Active Real-Time Reel Perception**:
+   - As reels change (or when the user swipes), the Accessibility service extracts the active caption, creator name, and audio title from `rootInActiveWindow`.
+   - The companion bubble pulses and pops out an animated comic speech bubble with dynamic emoji badges (e.g. *"Look at this dog's outfit 🐶💀"* or *"Wait she's actually so talented 🤩"*).
+
+2. **Autonomous Like & Engagement Loop**:
+   - Every ~8–12 reels scrolled, the companion triggers a native center double-tap gesture.
+   - An expressive heart animation radiates from the bubble with a thought: *"Double-tapped! Definitely deserved that like ❤️"*.
+
+3. **Autonomous Comment Inspection Flow**:
+   - Every ~10–15 reels, the companion finds the comment button in the node tree, performs a tap, and waits ~1.2s for comments to load.
+   - It reads visible comment text, generates a lively reaction (e.g. *"Bro the top comment is ruthless 💀"*), and executes `GLOBAL_ACTION_BACK` to return to the video.
+
+4. **Speech Bubble Micro-Interactions**:
+   - Tap the speech bubble or companion avatar anytime to open the compact cyber card controls.
+   - Speech bubbles smoothly animate in and out with bouncy spring physics, auto-dismissing after 3.5 seconds to avoid obscuring video content.
+
+### Visual Styling & Theme
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                   ANDROID SYSTEM WINDOW MANAGER                        │
-│                                                                        │
-│   ┌────────────────────────────────┐  ┌─────────────────────────────┐  │
-│   │ Floating Avatar Bubble View    │  │ Compact Overlay Popup View  │  │
-│   │  • TYPE_APPLICATION_OVERLAY   │  │  • Sleek Cyber Card          │  │
-│   │  • Free-floating drag listener │  │  • Quick Actions:            │  │
-│   │  • Animated state glowing halo │  │    - Next Reel (Swipe Up)   │  │
-│   │  • Pixel Creature artwork      │  │    - Like Reel (Double-Tap) │  │
-│   │  • Status badge (Thinking...)  │  │    - Explain On-Screen      │  │
-│   └────────────────────────────────┘  │    - Draft Comment / Copy   │  │
-│                                       │    - Stop ("One more reel!")│  │
-│                                       └─────────────────────────────┘  │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                    FLOATING COMPANION SERVICE                          │
-│   • Manages WindowManager life cycle (add/update/remove views)         │
-│   • Dispatches gestures via AiBreakAccessibilityService               │
-│   • Coordinates with ConversationBrain & HeuristicRuleBrain            │
-│   • Runs human-like scroll coroutine with variable jitter delays       │
-└────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│                   EXTERNAL REELS APP                   │
+│                                                        │
+│                  ┌──────────────────────┐              │
+│                  │  "Top comment got me │ 💬 Comic     │
+│                  │   crying fr 😭💀"    │    Bubble    │
+│                  └───────────┬──────────┘              │
+│                              │                         │
+│                         ╭────┴────╮                    │
+│                         │  ( ˘ ³˘)│ 🤖 Floating        │
+│                         │  ❤️ 🤩  │    Companion       │
+│                         ╰─────────╯    Bubble          │
+│                                                        │
+└────────────────────────────────────────────────────────┘
 ```
 
----
-
-## 2. Key Components & Implementation Details
-
-### Component A: `FloatingCompanionService` (WindowManager Native Overlay)
-- **Overlay Window Management:**
-  - Create and attach avatar view to `WindowManager` using `TYPE_APPLICATION_OVERLAY`.
-  - Handle `FLAG_NOT_FOCUSABLE` for smooth touch passthrough to background apps while dragging.
-  - Touch event tracking (`ACTION_DOWN`, `ACTION_MOVE`, `ACTION_UP`) allowing 100% free-floating placement anywhere on screen.
-- **Compact Overlay Popup:**
-  - Tapping avatar inflates a lightweight Compose-based or custom M3 overlay window.
-  - Compact size (width ~280dp, max-height ~380dp) positioned comfortably on top of external apps.
-  - Provides quick action chips:
-    - 🔄 **Scroll Next** (Human-like curved swipe up)
-    - ❤️ **Like Reel** (Double-tap center of screen)
-    - 💬 **Draft Comment** (Human-like quirky comment with 1-tap clipboard copy)
-    - 🧠 **Explain Reel** (Breaks down visual tags & humor)
-    - 🛑 **Stop Break** (Triggers quirky "one more reel!" procrastination dialogue)
-    - ✕ **Close Popup** (Leaves avatar floating)
-
-### Component B: Human-Like Scrolling & Procrastination Engine
-- **Variable Humanized Dwell Times:**
-  - 3s to 5s for uninteresting/skipped content.
-  - 7s to 14s for high-interest topics (coding, cute aesthetics, space science).
-  - Occasional micro-pauses mimicking human reading/listening behavior.
-- **The "One More Reel!" Reflex:**
-  - When the user presses Stop or timer elapses, an animated thought bubble pops up: *"Wait, just one more reel! This one looks promising..."*
-  - Scrolls one final time before completing the session debrief.
-- **Interactive Comment & Like Automation:**
-  - Pre-generates realistic, witty, and contextual comments based on current detected tags.
-  - Copies to Android clipboard so user can paste into comments with 1 tap.
-
-### Component C: In-App & Overlay Permission Handling
-- Robust `canDrawOverlays(context)` check.
-- If permission missing, presents a helpful Material 3 guide sheet and opens Android's "Display over other apps" settings directly with user package targeted.
-- Fallback in-app draggable bubble for instant emulator previewing.
+- **Aesthetic Direction**: High-energy Cyberpunk Companion meets Manga comic expression.
+- **Color Accents**: Neon Cyan (`#00F0FF`), Electric Rose (`#FF0055` for likes), Amber Gold (`#FFB800` for comments), and Terminal Emerald (`#00FF88`).
+- **Typography**: Bold monospace labels paired with expressive emojis.
+- **Motion**: Spring-based pop-in/pop-out animations using Jetpack Compose `AnimatedVisibility` with scale and fade.
 
 ---
 
-## 3. Verification & Safety
+## 3. Key Product Decisions & Trade-Offs
 
-1. Verify `compile_applet` succeeds without syntax or lifecycle errors.
-2. Verify touch dispatch: dragging bubble across Instagram, YouTube Shorts, Reddit, or Home Screen moves freely without crashing.
-3. Test double-tap like gesture and curved swipe gesture via `AiBreakAccessibilityService`.
-4. Ensure zero internet permission usage (100% offline).
-5. Compile debug APK and update `/public/app-debug.apk` and `.build-outputs/app-debug.apk`.
+- **Decision 1: Real-Time Content Extraction via Accessibility Tree**
+  - *Chosen Approach*: Recursive traversal of `AccessibilityNodeInfo` (`text`, `contentDescription`, `viewIdResourceName`) filtering for reel captions, author usernames, audio titles, and comment items.
+  - *Why*: Fast (<15ms), zero network overhead, no battery-draining screen capture or MediaProjection recording required.
+  - *Alternatives Considered*: MediaProjection OCR was rejected because it causes system dialog popups, consumes excessive battery, and lags video playback.
+
+- **Decision 2: Non-Intrusive Thought Bubble System**
+  - *Chosen Approach*: Comic bubble rendered directly above or to the side of the floating avatar in the same `WindowManager` window, auto-collapsing after 3.5 seconds.
+  - *Why*: Keeps the user immersed in their reel without cluttering the screen or blocking the main video viewport.
+
+- **Decision 3: Smart Comment Section Safe-Exit**
+  - *Chosen Approach*: Inspect comments for max 2.5 seconds, then safely execute `performGlobalAction(GLOBAL_ACTION_BACK)` or tap the close/dismiss node, with fallback timeouts so the user never gets stuck in comment view.
+
+---
+
+## 4. Technical Architecture & Data Strategy
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     AiBreakAccessibilityService                         │
+│  - inspectActiveReel(): extracts ReelInfo (caption, creator, comments) │
+│  - performDoubleTapLike(): center viewport double-tap gesture          │
+│  - performCommentOpenAndRead(): taps comment node, reads top comments  │
+│  - performBack(): returns from comment view                             │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ Reel Context & Events
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     FloatingCompanionController                         │
+│  - Reel Counter: tracks scrolls, triggers likes (~10) & comments (~12) │
+│  - Live Reaction Engine: analyzes reel tags/caption -> comic thought   │
+│  - Emoji Expression State: IDLE, HEART_EYES, LAUGHING, SHOCKED, etc.   │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │ StateFlow: thought, emoji, visible
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      FloatingCompanionService                           │
+│  - Hosts Draggable Window (Free-Floating, No Edge Snapping)             │
+│  - CompanionAvatarBubble: animated creature with live expression badge │
+│  - PopOutComicBubble: animated balloon with speech arrow & emoji       │
+│  - CompactOverlayPopup: interactive quick controls                      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Component & File Mapping
+
+1. **`AiBreakAccessibilityService.kt`**:
+   - Add `extractActiveReelInfo(): ExtractedReelInfo?` that navigates `rootInActiveWindow` looking for text elements with IDs matching Instagram (`row_feed_view_caption`, `reel_viewer_title`, etc.), YouTube Shorts (`reel_player_title`, `channel_name`), or generic scrollable text nodes.
+   - Add `openAndReadComments(onCommentsFound: (List<String>) -> Unit)`.
+   - Add safe comment dismissal with timeout protection.
+
+2. **`FloatingCompanionController.kt`**:
+   - Add `_activeComicThought` state with auto-decay timer.
+   - Add `_activeEmojiReaction` state (e.g. "❤️", "💀", "😂", "✨", "👀", "🔥").
+   - Add `processReelPerception(reelInfo: ExtractedReelInfo)` to generate context-aware remarks using `PersonalityProfile`.
+   - Update scroll loop cadence to like every 8–12 reels and inspect comments every 10–15 reels.
+
+3. **`CompanionAvatarBubble.kt`**:
+   - Integrate `PopOutComicBubble` composable directly linked to the bubble with tail-pointer arrow.
+   - Add animated reaction badge (floating emoji particle on like/comment).
+
+4. **`RealDeviceController.kt`**:
+   - Integrate perception trigger in `startSession()` loop so each autonomous scroll triggers reel perception -> speech bubble -> autonomous like/comment check.
+
+---
+
+## 5. Verification & Testing Plan
+
+1. **Compilation Check**:
+   - Run `compile_applet` to verify clean build with zero Kotlin syntax or dependency errors.
+2. **Local Robolectric & Unit Tests**:
+   - Run `gradle :app:testDebugUnitTest` to ensure all existing and new unit test suites pass without regression.
+3. **APK Generation**:
+   - Assemble debug APK and ensure `.build-outputs/app-debug.apk` and `public/app-debug.apk` are fully updated for user installation and live emulator testing.

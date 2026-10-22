@@ -46,8 +46,8 @@ import com.example.R
 import com.example.companion.FloatingCompanionController
 import com.example.companion.ui.CompanionAvatarBubble
 import com.example.companion.ui.CompactOverlayPopup
+import com.example.companion.ui.PopOutComicBubble
 import com.example.ui.theme.AiBreakTheme
-import kotlin.math.abs
 import kotlin.math.hypot
 
 class FloatingCompanionService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
@@ -112,7 +112,7 @@ class FloatingCompanionService : Service(), LifecycleOwner, ViewModelStoreOwner,
 
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AI BREAK Companion Active")
-            .setContentText("Hovering over other apps. Tap avatar to open compact controls.")
+            .setContentText("Hovering over other apps with live reel perception.")
             .setSmallIcon(R.drawable.ic_app_icon)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
@@ -141,7 +141,7 @@ class FloatingCompanionService : Service(), LifecycleOwner, ViewModelStoreOwner,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = (screenWidth - 240).coerceAtLeast(20)
+            x = (screenWidth - 250).coerceAtLeast(20)
             y = 350
         }
         windowParams = params
@@ -156,15 +156,30 @@ class FloatingCompanionService : Service(), LifecycleOwner, ViewModelStoreOwner,
                     val state by FloatingCompanionController.companionState.collectAsState()
                     val provider by FloatingCompanionController.selectedProvider.collectAsState()
                     val isPopupOpen by FloatingCompanionController.isOverlayPopupVisible.collectAsState()
+                    val activeComicThought by FloatingCompanionController.activeComicThought.collectAsState()
+                    val isComicBubbleVisible by FloatingCompanionController.isComicBubbleVisible.collectAsState()
+                    val activeEmoji by FloatingCompanionController.activeEmojiReaction.collectAsState()
 
                     Column(
                         modifier = Modifier.wrapContentSize(),
                         horizontalAlignment = Alignment.End
                     ) {
-                        // The Circular Avatar Bubble
+                        // Pop-out comic speech bubble right above/beside avatar
+                        PopOutComicBubble(
+                            thought = activeComicThought,
+                            visible = isComicBubbleVisible && !isPopupOpen,
+                            onClick = {
+                                FloatingCompanionController.toggleOverlayPopup()
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // The Circular Avatar Bubble with expression emoji badge
                         CompanionAvatarBubble(
                             state = state,
                             providerLabel = provider.displayName,
+                            activeEmoji = activeEmoji,
                             onClick = {
                                 FloatingCompanionController.toggleOverlayPopup()
                             }

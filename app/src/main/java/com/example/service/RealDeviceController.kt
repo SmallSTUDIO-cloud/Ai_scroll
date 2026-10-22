@@ -89,6 +89,7 @@ class RealDeviceController(private val context: Context) {
                 if (scrolled) {
                     val newCount = _config.value.scrollCount + 1
                     _config.value = _config.value.copy(scrollCount = newCount)
+                    com.example.companion.FloatingCompanionController.onReelSwiped(context)
                 }
                 delay(interval * 1000L)
                 elapsed += interval
