@@ -12,6 +12,7 @@ enum class CompanionState(val displayName: String) {
 }
 
 enum class BrainProvider(val displayName: String, val isOnline: Boolean) {
+    GEMINI_ONLINE("Gemini 3.5 Flash (Online + Fallback)", true),
     HEURISTIC_LOCAL("Heuristic (100% Offline)", false),
     LOCAL_MODEL("Local Model (GGUF/TFLite)", false),
     OPENAI("OpenAI (ChatGPT)", true),

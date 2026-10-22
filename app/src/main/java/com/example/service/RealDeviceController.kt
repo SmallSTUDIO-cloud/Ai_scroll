@@ -84,15 +84,19 @@ class RealDeviceController(private val context: Context) {
             // Initial wait for the external app to render its feed
             delay(3500)
 
+            var currentWaitSec = _config.value.scrollCooldownSec.coerceAtLeast(6)
+
             while (_config.value.isSessionActive && elapsed < maxSeconds) {
                 val scrolled = AiBreakAccessibilityService.performScrollUpGesture()
                 if (scrolled) {
                     val newCount = _config.value.scrollCount + 1
                     _config.value = _config.value.copy(scrollCount = newCount)
-                    com.example.companion.FloatingCompanionController.onReelSwiped(context)
+                    com.example.companion.FloatingCompanionController.onReelSwiped(context) { adaptiveSeconds ->
+                        currentWaitSec = adaptiveSeconds
+                    }
                 }
-                delay(interval * 1000L)
-                elapsed += interval
+                delay(currentWaitSec * 1000L)
+                elapsed += currentWaitSec
             }
 
             stopSession()

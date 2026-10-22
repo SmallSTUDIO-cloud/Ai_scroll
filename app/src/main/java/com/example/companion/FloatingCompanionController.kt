@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import com.example.companion.engine.ConversationBrain
+import com.example.companion.engine.GeminiReelBrain
 import com.example.companion.engine.HeuristicConversationBrain
 import com.example.companion.engine.RemoteModelBrain
 import com.example.companion.model.BrainProvider
@@ -43,7 +44,7 @@ object FloatingCompanionController {
     private val _companionState = MutableStateFlow(CompanionState.IDLE)
     val companionState: StateFlow<CompanionState> = _companionState.asStateFlow()
 
-    private val _selectedProvider = MutableStateFlow(BrainProvider.HEURISTIC_LOCAL)
+    private val _selectedProvider = MutableStateFlow(BrainProvider.GEMINI_ONLINE)
     val selectedProvider: StateFlow<BrainProvider> = _selectedProvider.asStateFlow()
 
     private val _inAppBubbleEnabled = MutableStateFlow(true)
@@ -52,7 +53,7 @@ object FloatingCompanionController {
     private val _isOverlayPopupVisible = MutableStateFlow(false)
     val isOverlayPopupVisible: StateFlow<Boolean> = _isOverlayPopupVisible.asStateFlow()
 
-    private val _currentThought = MutableStateFlow("Exploring the algorithmic feed like a human...")
+    private val _currentThought = MutableStateFlow("Cognitive reels companion active. Observing feed like a human...")
     val currentThought: StateFlow<String> = _currentThought.asStateFlow()
 
     // Lively Pop-Out Comic Bubble & Emoji state
@@ -74,18 +75,21 @@ object FloatingCompanionController {
     private val _isReadingComments = MutableStateFlow(false)
     val isReadingComments: StateFlow<Boolean> = _isReadingComments.asStateFlow()
 
-    // Counters for human-like cadence (~1 like every 8-12 reels, ~1 comment read every 10-15 reels)
+    private val _isPostingComment = MutableStateFlow(false)
+    val isPostingComment: StateFlow<Boolean> = _isPostingComment.asStateFlow()
+
+    // Counters for human-like cadence (~1 like every 8-12 reels, ~1 comment post every 10-14 reels)
     private var reelsSinceLastLike = 0
     private var targetLikeInterval = Random.nextInt(8, 12)
 
     private var reelsSinceLastComment = 0
-    private var targetCommentInterval = Random.nextInt(10, 15)
+    private var targetCommentInterval = Random.nextInt(10, 14)
 
     private val _messages = MutableStateFlow<List<CompanionMessage>>(
         listOf(
             CompanionMessage(
                 sender = MessageSender.COMPANION,
-                text = "Hello! I am your AI BREAK companion. I watch reels with you, read captions, and give live feedback!"
+                text = "Hello! I am your cognitive AI companion. I monitor reel context, adapt watch time, and interact like a real viewer."
             )
         )
     )
@@ -99,8 +103,9 @@ object FloatingCompanionController {
 
     private var activeProfile: PersonalityProfile = PersonalityProfile.PRESET_TECH_NERD
 
-    private var heuristicBrain: ConversationBrain = HeuristicConversationBrain()
-    private var activeBrain: ConversationBrain = heuristicBrain
+    private val heuristicBrain = HeuristicConversationBrain()
+    private val geminiBrain = GeminiReelBrain()
+    private var activeBrain: ConversationBrain = geminiBrain
 
     fun updateActiveProfile(profile: PersonalityProfile) {
         activeProfile = profile
@@ -125,7 +130,6 @@ object FloatingCompanionController {
     fun toggleOverlayPopup() {
         _isOverlayPopupVisible.value = !_isOverlayPopupVisible.value
         if (_isOverlayPopupVisible.value) {
-            // Dismiss comic bubble when full popup opens
             _isComicBubbleVisible.value = false
         }
     }
@@ -182,6 +186,7 @@ object FloatingCompanionController {
     fun setProvider(provider: BrainProvider, userApiKey: String? = null) {
         _selectedProvider.value = provider
         activeBrain = when (provider) {
+            BrainProvider.GEMINI_ONLINE -> GeminiReelBrain(userApiKey)
             BrainProvider.HEURISTIC_LOCAL, BrainProvider.LOCAL_MODEL -> heuristicBrain
             BrainProvider.OPENAI, BrainProvider.ANTHROPIC -> RemoteModelBrain(provider, userApiKey)
         }
@@ -208,7 +213,7 @@ object FloatingCompanionController {
             )
             _companionState.value = CompanionState.SPEAKING
             showComicBubble(
-                text = replyText.take(75),
+                text = replyText.take(80),
                 emoji = "💬",
                 tag = "COMPANION",
                 accent = BubbleAccent.CYAN
@@ -219,24 +224,26 @@ object FloatingCompanionController {
     }
 
     /**
-     * Inspects the active screen in real-time, extracts text & metadata,
-     * and generates an authentic, lively human-like reaction.
+     * Inspects active reel content in the background (creator, captions, metrics, views, audio)
+     * and shows a lively, authentic human reflection.
      */
-    fun perceiveAndReactToScreen(context: Context) {
+    fun perceiveAndReactToScreen(context: Context): Int {
         val reelInfo = AiBreakAccessibilityService.extractCurrentReel()
         if (reelInfo != null) {
             _lastExtractedReel.value = reelInfo
             val summary = reelInfo.getSummary()
             _currentScreenContext.value = summary
 
+            val watchDuration = reelInfo.computeAdaptiveWatchDurationSeconds()
+
             val (thoughtText, emoji, accent, state) = when {
-                // User requirement: Attracted to cute/beautiful girls videos
+                // User explicit requirement: Attracted to cute/beautiful girls videos
                 reelInfo.isLikelyGirlOrAesthetic -> {
                     val girlThoughts = listOf(
                         "Bro she is gorgeous... algorithm definitely locked in on my taste 🤩✨",
                         "Wait her aesthetic and outfit is actually 10/10! Unreal ✨",
                         "Okay she is stunning! Definitely giving this one a heart ❤️",
-                        "The vibe here is immaculate. Peak algorithm recommendation 🤩"
+                        "Watching this one fully... vibe is immaculate 🤩"
                     )
                     Quadruple(
                         girlThoughts[Random.nextInt(girlThoughts.size)],
@@ -246,7 +253,23 @@ object FloatingCompanionController {
                     )
                 }
 
-                // Humorous or meme content
+                // Tech / Coding / Engineering
+                reelInfo.isTechOrCoding -> {
+                    val techThoughts = listOf(
+                        "Clean dev architecture! Taking notes on this workflow 💻🧠",
+                        "High signal-to-noise ratio here. Staying to watch the breakdown 🧠",
+                        "That setup and compile speed is clean though 🔥",
+                        "Solid engineering insight. High IQ content 🧠"
+                    )
+                    Quadruple(
+                        techThoughts[Random.nextInt(techThoughts.size)],
+                        "🧠",
+                        BubbleAccent.BLUE,
+                        CompanionState.CURIOUS
+                    )
+                }
+
+                // Humorous or meme
                 reelInfo.isHumorOrMeme -> {
                     val memeThoughts = listOf(
                         "LMAOO the punchline caught me completely off guard 💀😭",
@@ -262,33 +285,27 @@ object FloatingCompanionController {
                     )
                 }
 
-                // Coding / Tech content
-                reelInfo.isTechOrCoding -> {
-                    val techThoughts = listOf(
-                        "Clean dev setup! Taking notes on this workflow 💻🧠",
-                        "High signal-to-noise ratio here. Solid engineering insight.",
-                        "That keyboard and terminal setup is clean though 🔥",
-                        "Compiler optimization trick spotted! High IQ content 🧠"
-                    )
-                    Quadruple(
-                        techThoughts[Random.nextInt(techThoughts.size)],
-                        "🧠",
-                        BubbleAccent.BLUE,
-                        CompanionState.CURIOUS
-                    )
-                }
-
-                // Music / Dance content
+                // Music / Dance
                 reelInfo.isMusicOrDance -> {
                     val musicThoughts = listOf(
                         "This audio has been stuck in my head all day 🎶🔥",
-                        "The transition on this beat drop was insanely clean ✨",
+                        "The beat drop transition was insanely clean ✨",
                         "Vibes on this reel are unmatched! 🎵"
                     )
                     Quadruple(
                         musicThoughts[Random.nextInt(musicThoughts.size)],
                         "🔥",
                         BubbleAccent.EMERALD,
+                        CompanionState.CURIOUS
+                    )
+                }
+
+                // High viral engagement reel
+                reelInfo.isHighEngagement -> {
+                    Quadruple(
+                        "Viral clip detected! Watching to see why everyone is sharing this 👀🔥",
+                        "🔥",
+                        BubbleAccent.AMBER,
                         CompanionState.CURIOUS
                     )
                 }
@@ -303,17 +320,6 @@ object FloatingCompanionController {
                     Quadruple(
                         creatorThoughts[Random.nextInt(creatorThoughts.size)],
                         "👀",
-                        BubbleAccent.CYAN,
-                        CompanionState.CURIOUS
-                    )
-                }
-
-                // Caption snippet available
-                !reelInfo.caption.isNullOrBlank() -> {
-                    val capSnippet = reelInfo.caption.take(45)
-                    Quadruple(
-                        "Observing: \"$capSnippet...\" Interesting topic! 👀",
-                        "✨",
                         BubbleAccent.CYAN,
                         CompanionState.CURIOUS
                     )
@@ -343,30 +349,32 @@ object FloatingCompanionController {
             )
 
             scope.launch {
-                delay(2000)
+                delay(2200)
                 if (_companionState.value == state) {
                     _companionState.value = CompanionState.IDLE
                 }
             }
+            return watchDuration
         }
+        return 8
     }
 
     private data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
     /**
      * Called whenever a reel is swiped (either manually or during an autonomous session).
-     * Handles perception, autonomous likes (~1 in 10), and comment inspection (~1 in 12).
+     * Handles perception, adaptive watch time, autonomous likes (~1 in 10), and comment posting.
      */
-    fun onReelSwiped(context: Context) {
+    fun onReelSwiped(context: Context, onAdaptiveWaitDetermined: (Int) -> Unit = {}) {
         reelsSinceLastLike++
         reelsSinceLastComment++
 
         scope.launch {
-            // Give the new reel video ~1.8 seconds to load on screen
-            delay(1800)
+            delay(1600)
 
-            // 1. Perceive screen content and pop thought bubble
-            perceiveAndReactToScreen(context)
+            // 1. Perceive screen content and calculate adaptive watch time
+            val watchTime = perceiveAndReactToScreen(context)
+            onAdaptiveWaitDetermined(watchTime)
 
             // 2. Check like cadence (~1 in 8-12 reels)
             if (reelsSinceLastLike >= targetLikeInterval) {
@@ -377,93 +385,93 @@ object FloatingCompanionController {
                 return@launch
             }
 
-            // 3. Check comment reading cadence (~1 in 10-15 reels)
-            if (reelsSinceLastComment >= targetCommentInterval && !_isReadingComments.value) {
-                delay(1400)
+            // 3. Check comment posting cadence (~1 in 10-14 reels)
+            if (reelsSinceLastComment >= targetCommentInterval && !_isPostingComment.value) {
+                delay(1800)
                 reelsSinceLastComment = 0
-                targetCommentInterval = Random.nextInt(10, 15)
-                triggerInspectAndReadComments(context)
+                targetCommentInterval = Random.nextInt(10, 14)
+                triggerAutonomousCommentPosting(context)
             }
         }
     }
 
     /**
-     * Autonomously opens the comment section, scans visible comment nodes,
-     * reacts expressively, and closes the drawer.
+     * Autonomously opens comments, reads top discussion, synthesizes an authentic comment
+     * using Gemini / Heuristic brain, types it into the input node, submits it, and closes the drawer.
      */
-    fun triggerInspectAndReadComments(context: Context) {
-        if (_isReadingComments.value) return
-        _isReadingComments.value = true
+    fun triggerAutonomousCommentPosting(context: Context) {
+        if (_isPostingComment.value) return
+        _isPostingComment.value = true
 
         commentInspectionJob?.cancel()
         commentInspectionJob = scope.launch {
-            _companionState.value = CompanionState.CURIOUS
+            val reel = _lastExtractedReel.value ?: AiBreakAccessibilityService.extractCurrentReel()
+            _companionState.value = CompanionState.THINKING
+
             showComicBubble(
-                text = "Checking what the comments are saying... 👀",
-                emoji = "👀",
-                tag = "COMMENTS",
+                text = "Checking comments to drop an authentic reply... 💬",
+                emoji = "💬",
+                tag = "COMMENTING",
                 accent = BubbleAccent.AMBER,
-                durationMs = 2500L
+                durationMs = 2600L
             )
 
-            // 1. Open comment drawer
             val opened = AiBreakAccessibilityService.openComments()
             if (!opened) {
-                _isReadingComments.value = false
+                _isPostingComment.value = false
                 return@launch
             }
 
-            // 2. Allow bottom sheet animation to settle
-            delay(1400)
+            delay(1300)
 
-            // 3. Read top comment texts
+            // Read visible comments to ground our reply
             val comments = AiBreakAccessibilityService.readTopComments()
-            if (comments.isNotEmpty()) {
-                val topComment = comments.first()
-                val topLower = topComment.lowercase()
 
-                val (commentReaction, emoji) = when {
-                    topLower.contains("💀") || topLower.contains("nah") || topLower.contains("bro") || topLower.contains("wild") -> {
-                        Pair("Bro the top comment is ruthless: \"${topComment.take(45)}\" 💀", "💀")
-                    }
-                    topLower.contains("😂") || topLower.contains("lmao") || topLower.contains("lol") -> {
-                        Pair("Top comment got me crying: \"${topComment.take(45)}\" 😂", "😂")
-                    }
-                    topLower.contains("❤️") || topLower.contains("gorgeous") || topLower.contains("beautiful") -> {
-                        Pair("Comments agreeing she is stunning: \"${topComment.take(45)}\" 🤩", "🤩")
-                    }
-                    else -> {
-                        Pair("Top comment said: \"${topComment.take(50)}\" 💬", "💬")
-                    }
-                }
-
-                _companionState.value = CompanionState.HAPPY
-                showComicBubble(
-                    text = commentReaction,
-                    emoji = emoji,
-                    tag = "TOP COMMENT",
-                    accent = BubbleAccent.ROSE,
-                    durationMs = 3500L
-                )
+            // Synthesize comment using active brain
+            val commentToPost = if (activeBrain is GeminiReelBrain && reel != null) {
+                (activeBrain as GeminiReelBrain).synthesizeSmartComment(reel, comments, activeProfile)
+            } else if (reel != null) {
+                geminiBrain.synthesizeSmartComment(reel, comments, activeProfile)
             } else {
-                showComicBubble(
-                    text = "Comments look quiet here! Scrolling back to video... 👀",
-                    emoji = "👀",
-                    tag = "COMMENTS",
-                    accent = BubbleAccent.CYAN,
-                    durationMs = 2500L
-                )
+                activeBrain.draftReply(reel?.getSummary() ?: "Active Reel", activeProfile)
             }
 
-            // 4. Linger so user can also glance at comments
-            delay(2200)
+            showComicBubble(
+                text = "Typing: \"$commentToPost\" ✍️",
+                emoji = "✍️",
+                tag = "POSTING",
+                accent = BubbleAccent.BLUE,
+                durationMs = 3000L
+            )
 
-            // 5. Close comments
-            AiBreakAccessibilityService.closeComments()
-            delay(600)
+            // Submit comment via accessibility action
+            AiBreakAccessibilityService.postCommentAutonomously(commentToPost) { success ->
+                scope.launch {
+                    if (success) {
+                        _companionState.value = CompanionState.HAPPY
+                        showComicBubble(
+                            text = "Comment posted! Dropped some love on that reel ✨❤️",
+                            emoji = "❤️",
+                            tag = "POSTED",
+                            accent = BubbleAccent.ROSE,
+                            durationMs = 3500L
+                        )
+                        Toast.makeText(context, "💬 Bot commented: \"$commentToPost\"", Toast.LENGTH_SHORT).show()
+                    } else {
+                        showComicBubble(
+                            text = "Comment input unavailable or locked. Resuming video... 👀",
+                            emoji = "👀",
+                            tag = "COMMENTS",
+                            accent = BubbleAccent.CYAN,
+                            durationMs = 2500L
+                        )
+                    }
 
-            _isReadingComments.value = false
-            _companionState.value = CompanionState.IDLE
+                    delay(2000)
+                    _isPostingComment.value = false
+                    _companionState.value = CompanionState.IDLE
+                }
+            }
         }
     }
 
@@ -474,13 +482,13 @@ object FloatingCompanionController {
 
         scope.launch {
             showComicBubble(
-                text = "Analyzing reel audio, creator, and caption nodes... 🧠",
+                text = "Analyzing reel caption, metrics, and video context... 🧠",
                 emoji = "🧠",
                 tag = "ANALYZING",
                 accent = BubbleAccent.CYAN,
                 durationMs = 2000L
             )
-            delay(900)
+            delay(700)
 
             val explanation = activeBrain.explainReel(
                 reelTitle = contextSnippet,
@@ -518,16 +526,16 @@ object FloatingCompanionController {
         _companionState.value = CompanionState.THINKING
 
         scope.launch {
-            delay(700)
+            delay(500)
             val draft = activeBrain.draftReply(contextSnippet, activeProfile)
             _messages.value = _messages.value + CompanionMessage(
                 sender = MessageSender.COMPANION,
-                text = "Proposed Reply (Requires your approval to copy):\n\n\"$draft\"",
+                text = "Proposed Reply:\n\n\"$draft\"",
                 reelContext = contextSnippet,
                 isDraftReply = true
             )
             showComicBubble(
-                text = "Drafted reply: \"$draft\"",
+                text = "Drafted: \"$draft\"",
                 emoji = "✍️",
                 tag = "DRAFT",
                 accent = BubbleAccent.BLUE,
@@ -592,7 +600,6 @@ object FloatingCompanionController {
 
         scope.launch {
             delay(2400)
-            // One final scroll!
             AiBreakAccessibilityService.performScrollUpGesture()
             delay(1500)
             showComicBubble(

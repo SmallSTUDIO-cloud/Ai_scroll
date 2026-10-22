@@ -4,16 +4,23 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.graphics.Rect
+import android.os.Bundle
 import android.util.DisplayMetrics
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.example.model.ExtractedReelInfo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 class AiBreakAccessibilityService : AccessibilityService() {
+
+    private val serviceScope = CoroutineScope(Dispatchers.Main)
 
     companion object {
         private val _isServiceEnabled = MutableStateFlow(false)
@@ -66,6 +73,15 @@ class AiBreakAccessibilityService : AccessibilityService() {
             val service = instance ?: return false
             return service.performCloseComments()
         }
+
+        fun postCommentAutonomously(commentText: String, onComplete: (Boolean) -> Unit) {
+            val service = instance
+            if (service == null) {
+                onComplete(false)
+                return
+            }
+            service.executeAutonomousCommentSubmission(commentText, onComplete)
+        }
     }
 
     override fun onServiceConnected() {
@@ -94,7 +110,7 @@ class AiBreakAccessibilityService : AccessibilityService() {
 
     /**
      * Inspects the active window's node hierarchy to read live caption, creator username,
-     * and audio tags without needing screen-capture or video recording permissions.
+     * like count, comment count, share count, and audio tags without needing screen-capture.
      */
     fun extractVisibleReelContent(): ExtractedReelInfo? {
         val root = rootInActiveWindow ?: return null
@@ -124,13 +140,18 @@ class AiBreakAccessibilityService : AccessibilityService() {
         var creator: String? = null
         var caption: String? = null
         var audioTitle: String? = null
+        var likeCount: String? = null
+        var commentCount: String? = null
+        var shareCount: String? = null
+        var viewCount: String? = null
 
-        // 1. Scan for creator name
+        // 1. Scan for creator, metrics, audio, and caption
         for (snap in allNodeInfos) {
             val txt = snap.text?.trim() ?: continue
             val id = snap.viewId?.lowercase() ?: ""
             val desc = snap.contentDescription?.lowercase() ?: ""
 
+            // Creator handle
             if (creator == null) {
                 if (id.contains("author") || id.contains("username") || id.contains("user_name") ||
                     id.contains("channel_name") || id.contains("reel_channel") || desc.contains("profile")
@@ -141,7 +162,39 @@ class AiBreakAccessibilityService : AccessibilityService() {
                 }
             }
 
-            // 2. Scan for audio title
+            // Metrics: Like count
+            if (likeCount == null) {
+                if (id.contains("like_count") || id.contains("like_button") || desc.contains("like")) {
+                    val count = extractCountFromTextOrDesc(txt, desc)
+                    if (count != null) likeCount = count
+                }
+            }
+
+            // Metrics: Comment count
+            if (commentCount == null) {
+                if (id.contains("comment_count") || id.contains("comment_button") || desc.contains("comment")) {
+                    val count = extractCountFromTextOrDesc(txt, desc)
+                    if (count != null) commentCount = count
+                }
+            }
+
+            // Metrics: Share count
+            if (shareCount == null) {
+                if (id.contains("share") || desc.contains("share")) {
+                    val count = extractCountFromTextOrDesc(txt, desc)
+                    if (count != null) shareCount = count
+                }
+            }
+
+            // Metrics: View count
+            if (viewCount == null) {
+                if (id.contains("view") || desc.contains("view")) {
+                    val count = extractCountFromTextOrDesc(txt, desc)
+                    if (count != null) viewCount = count
+                }
+            }
+
+            // Audio title
             if (audioTitle == null) {
                 if (id.contains("audio") || id.contains("music") || id.contains("sound") ||
                     txt.contains("Original audio", ignoreCase = true) || txt.contains("♫") ||
@@ -151,7 +204,7 @@ class AiBreakAccessibilityService : AccessibilityService() {
                 }
             }
 
-            // 3. Scan for main caption
+            // Main caption
             if (caption == null) {
                 if (id.contains("caption") || id.contains("reel_title") || id.contains("video_title") ||
                     id.contains("description")
@@ -217,18 +270,38 @@ class AiBreakAccessibilityService : AccessibilityService() {
                 fullTextCorp.contains("beat") ||
                 fullTextCorp.contains("singing")
 
+        val isEducationalOrStory = fullTextCorp.contains("how to") ||
+                fullTextCorp.contains("lesson") ||
+                fullTextCorp.contains("tutorial") ||
+                fullTextCorp.contains("storytime") ||
+                fullTextCorp.contains("did you know") ||
+                fullTextCorp.contains("part 1") ||
+                fullTextCorp.contains("part 2") ||
+                fullTextCorp.contains("history")
+
         return ExtractedReelInfo(
             packageName = currentPkg,
             appName = appName,
             creator = creator,
             caption = caption,
             audioTitle = audioTitle,
-            rawVisibleTexts = allTexts.take(8),
+            likeCountText = likeCount,
+            commentCountText = commentCount,
+            shareCountText = shareCount,
+            viewCountText = viewCount,
+            rawVisibleTexts = allTexts.take(12),
             isLikelyGirlOrAesthetic = isLikelyGirlOrAesthetic,
             isHumorOrMeme = isHumorOrMeme,
             isTechOrCoding = isTechOrCoding,
-            isMusicOrDance = isMusicOrDance
+            isMusicOrDance = isMusicOrDance,
+            isEducationalOrStory = isEducationalOrStory
         )
+    }
+
+    private fun extractCountFromTextOrDesc(txt: String, desc: String): String? {
+        val countRegex = Regex("([0-9]+[.,]?[0-9]*\\s*[kKmMbB]?)")
+        val match = countRegex.find(txt) ?: countRegex.find(desc)
+        return match?.value?.trim()
     }
 
     private data class NodeSnapshot(
@@ -267,8 +340,136 @@ class AiBreakAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * Executes fully autonomous comment sequence:
+     * Open comment sheet -> Type synthesized comment into input node -> Click send/submit -> Close sheet
+     */
+    fun executeAutonomousCommentSubmission(commentText: String, onComplete: (Boolean) -> Unit) {
+        serviceScope.launch {
+            // Step 1: Open comments drawer
+            val opened = findAndClickCommentButton()
+            if (!opened) {
+                onComplete(false)
+                return@launch
+            }
+
+            // Step 2: Delay for comments sheet to slide up
+            delay(1300)
+
+            val root = rootInActiveWindow
+            if (root == null) {
+                performCloseComments()
+                onComplete(false)
+                return@launch
+            }
+
+            // Step 3: Find comment input EditText
+            val inputNode = findCommentInputNode(root)
+            if (inputNode == null) {
+                // Try tapping bottom input coordinate (~50% width, ~95% height)
+                val metrics: DisplayMetrics = resources.displayMetrics
+                dispatchTapCoordinates(metrics.widthPixels * 0.5f, metrics.heightPixels * 0.94f)
+                delay(600)
+            }
+
+            val refreshedRoot = rootInActiveWindow ?: root
+            val activeInput = findCommentInputNode(refreshedRoot)
+
+            var typed = false
+            if (activeInput != null) {
+                val args = Bundle().apply {
+                    putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, commentText)
+                }
+                typed = activeInput.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+            }
+
+            delay(800)
+
+            // Step 4: Click Post / Send button
+            val finalRoot = rootInActiveWindow ?: refreshedRoot
+            val postButton = findPostButtonNode(finalRoot)
+            var submitted = false
+            if (postButton != null) {
+                if (postButton.isClickable && postButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    submitted = true
+                } else {
+                    val rect = Rect()
+                    postButton.getBoundsInScreen(rect)
+                    if (rect.width() > 0 && rect.height() > 0) {
+                        submitted = dispatchTapCoordinates(rect.centerX().toFloat(), rect.centerY().toFloat())
+                    }
+                }
+            } else {
+                // Tap typical post button position (right side of keyboard/bottom row ~92% width, ~94% height)
+                val metrics: DisplayMetrics = resources.displayMetrics
+                submitted = dispatchTapCoordinates(metrics.widthPixels * 0.92f, metrics.heightPixels * 0.94f)
+            }
+
+            delay(1200)
+
+            // Step 5: Close comments to resume video playback
+            performCloseComments()
+
+            onComplete(typed || submitted)
+        }
+    }
+
+    private fun findCommentInputNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+
+        val className = node.className?.toString() ?: ""
+        val id = node.viewIdResourceName?.lowercase() ?: ""
+        val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+        val text = node.text?.toString()?.lowercase() ?: ""
+
+        val isEditText = className.contains("EditText", ignoreCase = true)
+        val isCommentTarget = id.contains("comment") ||
+                id.contains("input") ||
+                desc.contains("comment") ||
+                desc.contains("add a comment") ||
+                text.contains("add a comment") ||
+                text.contains("leave a comment")
+
+        if (isEditText && (isCommentTarget || node.isEditable)) {
+            return node
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            val found = findCommentInputNode(child)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun findPostButtonNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+
+        val id = node.viewIdResourceName?.lowercase() ?: ""
+        val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+        val text = node.text?.toString()?.lowercase() ?: ""
+
+        val isPost = text == "post" ||
+                text == "send" ||
+                desc.contains("post") ||
+                desc.contains("send") ||
+                id.contains("post") ||
+                id.contains("send") ||
+                id.contains("submit")
+
+        if (isPost && node.isVisibleToUser) {
+            return node
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            val found = findPostButtonNode(child)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    /**
      * Finds and triggers the comment action button on Instagram, YouTube Shorts, TikTok, or Reddit.
-     * Uses node click first; if node is wrapped or non-clickable, computes its screen coordinate and dispatches a gesture tap.
      */
     fun findAndClickCommentButton(): Boolean {
         val root = rootInActiveWindow ?: return false
@@ -339,7 +540,6 @@ class AiBreakAccessibilityService : AccessibilityService() {
         val snapshots = mutableListOf<NodeSnapshot>()
         traverseNodeTree(root, allTexts, snapshots)
 
-        // Filter out button titles, status items, and short metadata
         val commentTexts = allTexts.filter { str ->
             val lower = str.lowercase().trim()
             str.length in 8..180 &&
@@ -351,7 +551,7 @@ class AiBreakAccessibilityService : AccessibilityService() {
                     !lower.contains("share") &&
                     !lower.contains("report") &&
                     !lower.contains("view replies") &&
-                    !lower.matches(Regex("^[0-9]+[a-z]?$")) // not pure numbers or "2h"
+                    !lower.matches(Regex("^[0-9]+[a-z]?$"))
         }
 
         return commentTexts.take(6)
@@ -402,7 +602,6 @@ class AiBreakAccessibilityService : AccessibilityService() {
         val width = metrics.widthPixels.toFloat()
         val height = metrics.heightPixels.toFloat()
 
-        // Human thumb swipe geometry: slight right-to-left organic curve
         val startXJitter = Random.nextFloat() * 40f - 20f
         val startX = (width * 0.52f) + startXJitter
         val startY = height * (0.74f + Random.nextFloat() * 0.05f)

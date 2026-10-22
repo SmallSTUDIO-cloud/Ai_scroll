@@ -1,23 +1,23 @@
-# Lively AI Companion with Real Reel Perception & Comment Engagement
+# Production-Grade Cognitive Reels Agent & Autonomous Engagement Engine
 
-Transform the floating AI companion bubble into an active, lively, and reactive entity that observes real background reels (Instagram, YouTube Shorts, TikTok, Reddit), displays dynamic pop-out comic speech bubbles, periodically auto-likes reels (~1 in 10), and autonomously opens, inspects, and reacts to top comment threads.
+An intelligent, senior-engineered background companion for Instagram, YouTube Shorts, and TikTok that deeply perceives reels (captions, creators, likes, shares, comments, and on-screen text) using Gemini 3.5 Flash with offline fallback, autonomously posts genuine contextual comments, adaptively watches captivating videos in full, and maintains a movable, expressive floating presence.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following architectural decisions were confirmed based on user feedback:
-> - **Visual Expression**: Pop-out comic speech bubble with animated emoji reactions attached to the floating avatar.
-> - **Reel Perception**: Direct on-screen text, creator handle, audio title, and caption extraction via Android Accessibility node hierarchy traversal (`rootInActiveWindow`). Zero extra permissions and 100% real-time on-device privacy.
-> - **Comment Automation**: Autonomous comment inspection cycle: taps the comment button node, pauses to scan top comment texts, reacts with a lively thought, and performs a native back gesture to resume smooth scrolling.
-> - **Natural Cadence**: Likes dispatched every ~8–12 reels (via center double-tap), comments inspected every ~10–15 reels.
+> The following architectural decisions were confirmed via interactive user requirements:
+> - **Autonomous Comment Posting**: Fully autonomous comment typing into the social app's comment input node followed by instant auto-submission via accessibility actions (`ACTION_SET_TEXT` + send button click).
+> - **Adaptive Watch Time**: Dynamic viewing duration based on reel substance: captivating or high-engagement reels are watched fully (18–35 seconds), while low-signal reels are skipped in 5–8 seconds.
+> - **Intelligence Brain**: Online Gemini AI (`gemini-3.5-flash`) for nuanced reel context comprehension, with an ultra-fast on-device heuristic fallback ensuring continuous operation even offline or with zero latency.
+> - **Movable UI**: Both the circular avatar bubble and the compact cyber control card are fully draggable anywhere across the screen without restrictive edge snapping.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: As the user watches reels or runs autonomous AI scroll sessions on Instagram, YouTube Shorts, or TikTok, the floating companion avatar actively reacts in real-time. It displays humorous or aesthetic speech bubbles, reacts with expressive animated emojis (❤️, 😂, 💀, 🤩), double-taps to like ~1 in 10 reels, and occasionally opens the comment section, reads what other people are saying, gasps/laughs, and closes the comments.
-- **Target Audience**: Users enjoying short-form video breaks who want an interactive, companionate experience that feels like watching reels with a quirky, fun friend.
-- **Key Value**: Replaces a passive static widget with an intelligent, expressive companion that actually understands and engages with live content on the screen.
+- **What It Does**: As the user browses short-form video feeds (or lets the bot run autonomous watch sessions), the agent reads all on-screen UI nodes in the background (creator name, like count, comment count, share count, full captions, on-screen text, and audio cues). It feeds this context to an intelligent reasoning loop that produces authentic human reactions, decides whether to double-tap like (~1 in 10 reels), chooses when to watch a reel to completion, and autonomously opens comments, reads discussions, types an insightful comment, and submits it.
+- **Target Audience**: Power users and creators seeking an intelligent, lively co-pilot that simulates authentic human engagement and curation.
+- **Key Value**: Replaces mechanical scrolling with intelligent comprehension and true autonomous interaction.
 
 ---
 
@@ -25,120 +25,113 @@ Transform the floating AI companion bubble into an active, lively, and reactive 
 
 ### Key User Flows
 
-1. **Active Real-Time Reel Perception**:
-   - As reels change (or when the user swipes), the Accessibility service extracts the active caption, creator name, and audio title from `rootInActiveWindow`.
-   - The companion bubble pulses and pops out an animated comic speech bubble with dynamic emoji badges (e.g. *"Look at this dog's outfit 🐶💀"* or *"Wait she's actually so talented 🤩"*).
+1. **Background Perception & Covert Comprehension**:
+   - The user opens Instagram Reels, YouTube Shorts, or TikTok.
+   - The bot inspects all visible text, metrics (like count, share count, comment count), author identity, and audio title.
+   - Background reasoning processes the context without displaying raw metadata to the user.
 
-2. **Autonomous Like & Engagement Loop**:
-   - Every ~8–12 reels scrolled, the companion triggers a native center double-tap gesture.
-   - An expressive heart animation radiates from the bubble with a thought: *"Double-tapped! Definitely deserved that like ❤️"*.
+2. **Lively Human Reaction**:
+   - The bot displays expressive pop-out comic thought bubbles with context-specific reflections (e.g. *"Bro she is stunning... algorithm definitely locked in on my taste 🤩✨"*, *"Wait this compiler optimization workflow is genius 💻🧠"*, or *"LMAOO the top comment got me crying 💀😭"*).
+   - Animated emoji badges bounce on the avatar in sync with mood states (`HAPPY`, `CURIOUS`, `THINKING`, `SPEAKING`).
 
-3. **Autonomous Comment Inspection Flow**:
-   - Every ~10–15 reels, the companion finds the comment button in the node tree, performs a tap, and waits ~1.2s for comments to load.
-   - It reads visible comment text, generates a lively reaction (e.g. *"Bro the top comment is ruthless 💀"*), and executes `GLOBAL_ACTION_BACK` to return to the video.
+3. **Autonomous Comment Posting Sequence**:
+   - Every ~10–14 reels (or upon user trigger from the overlay card), the bot enters comment mode:
+     1. Taps comment button node on the right rail.
+     2. Pauses 1.2s to scan top community comments.
+     3. Synthesizes a natural, high-IQ comment tailored to the video topic and personality.
+     4. Focuses the comment input field (`EditText` node) and sets the text via `ACTION_SET_TEXT`.
+     5. Clicks the send/submit button (`button_post`, `send_button`, or contentDescription "Post").
+     6. Delays 1.0s, then closes the comment sheet via back gesture.
+     7. Pops a thought bubble: *"Dropped a comment on that! Moving to next reel 🚀"*.
 
-4. **Speech Bubble Micro-Interactions**:
-   - Tap the speech bubble or companion avatar anytime to open the compact cyber card controls.
-   - Speech bubbles smoothly animate in and out with bouncy spring physics, auto-dismissing after 3.5 seconds to avoid obscuring video content.
+4. **Adaptive Pacing (Full Reel vs Quick Skip)**:
+   - Deep/captivating reels (long educational captions, high engagement, or aesthetic beauty): Watched for 18–35 seconds.
+   - Standard reels: Watched for 6–10 seconds.
+   - Low-quality or unengaging content: Skipped after 4–6 seconds.
 
-### Visual Styling & Theme
-
-```
-┌────────────────────────────────────────────────────────┐
-│                   EXTERNAL REELS APP                   │
-│                                                        │
-│                  ┌──────────────────────┐              │
-│                  │  "Top comment got me │ 💬 Comic     │
-│                  │   crying fr 😭💀"    │    Bubble    │
-│                  └───────────┬──────────┘              │
-│                              │                         │
-│                         ╭────┴────╮                    │
-│                         │  ( ˘ ³˘)│ 🤖 Floating        │
-│                         │  ❤️ 🤩  │    Companion       │
-│                         ╰─────────╯    Bubble          │
-│                                                        │
-└────────────────────────────────────────────────────────┘
-```
-
-- **Aesthetic Direction**: High-energy Cyberpunk Companion meets Manga comic expression.
-- **Color Accents**: Neon Cyan (`#00F0FF`), Electric Rose (`#FF0055` for likes), Amber Gold (`#FFB800` for comments), and Terminal Emerald (`#00FF88`).
-- **Typography**: Bold monospace labels paired with expressive emojis.
-- **Motion**: Spring-based pop-in/pop-out animations using Jetpack Compose `AnimatedVisibility` with scale and fade.
+5. **Movable Free-Floating Overlay**:
+   - Both the circular companion bubble and the compact popup card can be dragged freely to any screen position.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: Real-Time Content Extraction via Accessibility Tree**
-  - *Chosen Approach*: Recursive traversal of `AccessibilityNodeInfo` (`text`, `contentDescription`, `viewIdResourceName`) filtering for reel captions, author usernames, audio titles, and comment items.
-  - *Why*: Fast (<15ms), zero network overhead, no battery-draining screen capture or MediaProjection recording required.
-  - *Alternatives Considered*: MediaProjection OCR was rejected because it causes system dialog popups, consumes excessive battery, and lags video playback.
+- **Decision 1: Dual-Brain Intelligence (Gemini 3.5 Flash + Heuristic Fallback)**
+  - *Chosen Approach*: When internet is available and an API key is present, queries `gemini-3.5-flash` for deep semantic comprehension and comment drafting; if offline or during rapid scrolling, immediately falls back to local heuristic reasoning without delaying gestures.
+  - *Why*: Delivers high-IQ, human-level commentary while guaranteeing zero freeze or latency in gesture dispatching.
 
-- **Decision 2: Non-Intrusive Thought Bubble System**
-  - *Chosen Approach*: Comic bubble rendered directly above or to the side of the floating avatar in the same `WindowManager` window, auto-collapsing after 3.5 seconds.
-  - *Why*: Keeps the user immersed in their reel without cluttering the screen or blocking the main video viewport.
+- **Decision 2: Direct Accessibility Typing & Submission**
+  - *Chosen Approach*: Uses Android's `AccessibilityNodeInfo.ACTION_SET_TEXT` with `Bundle.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, comment)` on the comment input node, followed by finding and clicking the submit button or dispatching a tap coordinate.
+  - *Why*: Works natively across Instagram, YouTube Shorts, and TikTok without needing clipboard pasting or user intervention.
 
-- **Decision 3: Smart Comment Section Safe-Exit**
-  - *Chosen Approach*: Inspect comments for max 2.5 seconds, then safely execute `performGlobalAction(GLOBAL_ACTION_BACK)` or tap the close/dismiss node, with fallback timeouts so the user never gets stuck in comment view.
+- **Decision 3: Non-Intrusive Floating Window Hierarchy**
+  - *Chosen Approach*: Single `ComposeView` with `FLAG_NOT_FOCUSABLE` during idle viewing, toggling `FLAG_NOT_TOUCH_MODAL` only when the user opens the keyboard in the popup.
+  - *Why*: Allows touch events outside the companion to pass directly to the underlying video player (swiping, pausing) uninterrupted.
 
 ---
 
 ## 4. Technical Architecture & Data Strategy
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     AiBreakAccessibilityService                         │
-│  - inspectActiveReel(): extracts ReelInfo (caption, creator, comments) │
-│  - performDoubleTapLike(): center viewport double-tap gesture          │
-│  - performCommentOpenAndRead(): taps comment node, reads top comments  │
-│  - performBack(): returns from comment view                             │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │ Reel Context & Events
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     FloatingCompanionController                         │
-│  - Reel Counter: tracks scrolls, triggers likes (~10) & comments (~12) │
-│  - Live Reaction Engine: analyzes reel tags/caption -> comic thought   │
-│  - Emoji Expression State: IDLE, HEART_EYES, LAUGHING, SHOCKED, etc.   │
-└────────────────────────────────────┬────────────────────────────────────┘
-                                     │ StateFlow: thought, emoji, visible
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                      FloatingCompanionService                           │
-│  - Hosts Draggable Window (Free-Floating, No Edge Snapping)             │
-│  - CompanionAvatarBubble: animated creature with live expression badge │
-│  - PopOutComicBubble: animated balloon with speech arrow & emoji       │
-│  - CompactOverlayPopup: interactive quick controls                      │
-└─────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Background Reels Agent                          │
+│                                                                        │
+│   ┌──────────────────────────────────────────────────────────────┐     │
+│   │                 AiBreakAccessibilityService                  │     │
+│   │  - parseReelMetrics(): likes, comments, shares, views       │     │
+│   │  - autoTypeAndSubmitComment(text): native comment posting    │     │
+│   │  - performDoubleTapLike(): center viewport gesture           │     │
+│   │  - performHumanScrollUp(): organic thumb swipe               │     │
+│   └──────────────────────────────┬───────────────────────────────┘     │
+│                                  │ Metric & Node Stream                │
+│                                  ▼                                     │
+│   ┌──────────────────────────────────────────────────────────────┐     │
+│   │                 FloatingCompanionController                  │     │
+│   │  - Gemini 3.5 Flash + Offline Brain Integration              │     │
+│   │  - Adaptive Watch Timer (18-35s captivating vs 5-8s skip)    │     │
+│   │  - Autonomous Like (~1 in 10) & Comment Auto-Poster          │     │
+│   └──────────────────────────────┬───────────────────────────────┘     │
+│                                  │ State & Comic Thought               │
+│                                  ▼                                     │
+│   ┌──────────────────────────────────────────────────────────────┐     │
+│   │                    FloatingCompanionService                  │     │
+│   │  - Free-floating draggable overlay view                      │     │
+│   │  - PopOutComicBubble with animated expressions               │     │
+│   │  - CompactOverlayPopup with manual action triggers           │     │
+│   └──────────────────────────────────────────────────────────────┘     │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component & File Mapping
+### Component Implementations
 
 1. **`AiBreakAccessibilityService.kt`**:
-   - Add `extractActiveReelInfo(): ExtractedReelInfo?` that navigates `rootInActiveWindow` looking for text elements with IDs matching Instagram (`row_feed_view_caption`, `reel_viewer_title`, etc.), YouTube Shorts (`reel_player_title`, `channel_name`), or generic scrollable text nodes.
-   - Add `openAndReadComments(onCommentsFound: (List<String>) -> Unit)`.
-   - Add safe comment dismissal with timeout protection.
+   - Enhanced `extractVisibleReelContent()`: Extracts numeric engagement metrics (likes string like "1.2M", comment count like "4.5K", shares) and video text chunks.
+   - `postAutonomousComment(commentText: String): Boolean`:
+     - Opens comment drawer if not open.
+     - Locates comment input field node (`EditText` / `android.widget.EditText`).
+     - Injects text via `ACTION_SET_TEXT`.
+     - Finds and clicks submit button (`Post`, `Send`, or coordinate tap).
+     - Closes drawer cleanly.
 
-2. **`FloatingCompanionController.kt`**:
-   - Add `_activeComicThought` state with auto-decay timer.
-   - Add `_activeEmojiReaction` state (e.g. "❤️", "💀", "😂", "✨", "👀", "🔥").
-   - Add `processReelPerception(reelInfo: ExtractedReelInfo)` to generate context-aware remarks using `PersonalityProfile`.
-   - Update scroll loop cadence to like every 8–12 reels and inspect comments every 10–15 reels.
+2. **`GeminiReelBrain.kt`**:
+   - Direct REST integration with `gemini-3.5-flash` using `BuildConfig.GEMINI_API_KEY`.
+   - Generates contextual, witty comments and thoughtful internal reactions based on reel title, caption, creator, and metrics.
+   - Falls back gracefully to `HeuristicConversationBrain` when offline.
 
-3. **`CompanionAvatarBubble.kt`**:
-   - Integrate `PopOutComicBubble` composable directly linked to the bubble with tail-pointer arrow.
-   - Add animated reaction badge (floating emoji particle on like/comment).
+3. **`RealDeviceController.kt` & `FloatingCompanionController.kt`**:
+   - Adaptive watch time algorithm: computes reel interest score -> determines delay (18–35s for full watch vs 6–10s standard).
+   - Frequency manager: ~1 in 10 like dispatch, ~1 in 12 comment auto-post.
 
-4. **`RealDeviceController.kt`**:
-   - Integrate perception trigger in `startSession()` loop so each autonomous scroll triggers reel perception -> speech bubble -> autonomous like/comment check.
+4. **`FloatingCompanionService.kt` & `CompactOverlayPopup.kt`**:
+   - Make the entire popup card draggable anywhere on screen, giving the user full flexibility over placement.
 
 ---
 
 ## 5. Verification & Testing Plan
 
 1. **Compilation Check**:
-   - Run `compile_applet` to verify clean build with zero Kotlin syntax or dependency errors.
+   - Run `compile_applet` to verify clean build with zero errors.
 2. **Local Robolectric & Unit Tests**:
-   - Run `gradle :app:testDebugUnitTest` to ensure all existing and new unit test suites pass without regression.
-3. **APK Generation**:
-   - Assemble debug APK and ensure `.build-outputs/app-debug.apk` and `public/app-debug.apk` are fully updated for user installation and live emulator testing.
+   - Run `gradle :app:testDebugUnitTest` to test metric extraction, adaptive watch time calculation, and comment generation.
+3. **APK Assembly**:
+   - Run `gradle assembleDebug` and update `.build-outputs/app-debug.apk` and `public/app-debug.apk`.

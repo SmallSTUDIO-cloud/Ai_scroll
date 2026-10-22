@@ -21,7 +21,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Comment
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lightbulb
-import androidx.compose.material.icons.filled.QuestionAnswer
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
@@ -54,6 +54,7 @@ import com.example.ui.theme.ObsidianBg
 import com.example.ui.theme.TerminalAmber
 import com.example.ui.theme.TerminalEmerald
 import com.example.ui.theme.TerminalRose
+import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
@@ -65,13 +66,14 @@ fun CompactOverlayPopup(
     val context = LocalContext.current
     val currentThought by FloatingCompanionController.currentThought.collectAsStateWithLifecycle()
     val isProcrastinating by FloatingCompanionController.isProcrastinating.collectAsStateWithLifecycle()
-    val isReadingComments by FloatingCompanionController.isReadingComments.collectAsStateWithLifecycle()
+    val isPostingComment by FloatingCompanionController.isPostingComment.collectAsStateWithLifecycle()
     val lastReel by FloatingCompanionController.lastExtractedReel.collectAsStateWithLifecycle()
     val activeEmoji by FloatingCompanionController.activeEmojiReaction.collectAsStateWithLifecycle()
+    val provider by FloatingCompanionController.selectedProvider.collectAsStateWithLifecycle()
 
     Box(
         modifier = modifier
-            .widthIn(max = 300.dp)
+            .widthIn(max = 310.dp)
             .clip(RoundedCornerShape(18.dp))
             .background(
                 Brush.verticalGradient(
@@ -80,13 +82,22 @@ fun CompactOverlayPopup(
             )
             .border(
                 1.5.dp,
-                if (isProcrastinating) TerminalAmber else if (isReadingComments) TerminalRose else NeonCyan.copy(alpha = 0.85f),
+                if (isProcrastinating) TerminalAmber else if (isPostingComment) TerminalRose else NeonCyan.copy(alpha = 0.85f),
                 RoundedCornerShape(18.dp)
             )
-            .padding(14.dp)
+            .padding(12.dp)
             .testTag("compact_overlay_popup")
     ) {
-        Column {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Drag grip indicator (reminds user the popup is freely movable)
+            Box(
+                modifier = Modifier
+                    .size(width = 36.dp, height = 4.dp)
+                    .background(TextMuted.copy(alpha = 0.4f), CircleShape)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             // Header Bar
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -94,16 +105,14 @@ fun CompactOverlayPopup(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Image(
-                            painter = painterResource(id = R.drawable.companion_avatar),
-                            contentDescription = "Companion Avatar",
-                            modifier = Modifier
-                                .size(30.dp)
-                                .clip(CircleShape)
-                                .border(1.dp, NeonCyan, CircleShape)
-                        )
-                    }
+                    Image(
+                        painter = painterResource(id = R.drawable.companion_avatar),
+                        contentDescription = "Companion Avatar",
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .border(1.dp, NeonCyan, CircleShape)
+                    )
 
                     Spacer(modifier = Modifier.width(6.dp))
 
@@ -116,7 +125,7 @@ fun CompactOverlayPopup(
 
                     Column {
                         Text(
-                            text = "AI BREAK BOT",
+                            text = "AI REEL AGENT",
                             color = TextPrimary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -126,16 +135,16 @@ fun CompactOverlayPopup(
                         Text(
                             text = when {
                                 isProcrastinating -> "QUIRK: ONE MORE REEL"
-                                isReadingComments -> "SCANNING COMMENTS..."
-                                lastReel != null -> "PERCEIVING: ${lastReel?.appName?.uppercase()}"
-                                else -> "AUTONOMOUS REEL AGENT"
+                                isPostingComment -> "TYPING & POSTING COMMENT..."
+                                lastReel != null -> "ONLINE: ${lastReel?.appName?.uppercase()}"
+                                else -> provider.displayName.take(18)
                             },
                             color = when {
                                 isProcrastinating -> TerminalAmber
-                                isReadingComments -> TerminalRose
+                                isPostingComment -> TerminalRose
                                 else -> NeonCyan
                             },
-                            fontSize = 8.5.sp,
+                            fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
@@ -235,24 +244,24 @@ fun CompactOverlayPopup(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Row 2: Read Comments & Explain Reel
+            // Row 2: Auto Comment on Video (Opens -> Types -> Submits) & Explain Reel
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Button(
-                    onClick = { FloatingCompanionController.triggerInspectAndReadComments(context) },
+                    onClick = { FloatingCompanionController.triggerAutonomousCommentPosting(context) },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = TerminalAmber.copy(alpha = 0.2f),
                         contentColor = TerminalAmber
                     ),
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                    modifier = Modifier.weight(1f).testTag("popup_read_comments_button")
+                    modifier = Modifier.weight(1f).testTag("popup_auto_comment_button")
                 ) {
-                    Icon(imageVector = Icons.Default.QuestionAnswer, contentDescription = null, modifier = Modifier.size(13.dp))
+                    Icon(imageVector = Icons.Default.Send, contentDescription = null, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("COMMENTS 💬", fontSize = 9.5.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("AUTO COMMENT", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 }
 
                 Button(
@@ -273,7 +282,7 @@ fun CompactOverlayPopup(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Row 3: Draft Comment
+            // Row 3: Draft to clipboard
             Button(
                 onClick = { FloatingCompanionController.draftAndCopyComment(context) },
                 colors = ButtonDefaults.buttonColors(
@@ -286,7 +295,7 @@ fun CompactOverlayPopup(
             ) {
                 Icon(imageVector = Icons.Default.Comment, contentDescription = null, modifier = Modifier.size(13.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("DRAFT REPLY (COPY TO CLIPBOARD)", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                Text("COPY DRAFT TO CLIPBOARD", fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
             }
 
             Spacer(modifier = Modifier.height(8.dp))

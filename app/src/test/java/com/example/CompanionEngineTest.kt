@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.companion.FloatingCompanionController
+import com.example.companion.engine.GeminiReelBrain
 import com.example.companion.engine.HeuristicConversationBrain
 import com.example.companion.engine.RemoteModelBrain
 import com.example.companion.model.BrainProvider
@@ -72,6 +73,29 @@ class CompanionEngineTest {
     }
 
     @Test
+    fun testGeminiReelBrainOfflineFallback() = runBlocking {
+        val geminiBrain = GeminiReelBrain(customApiKey = null)
+        val reply = geminiBrain.respondToQuery(
+            userQuery = "what are you doing?",
+            screenContext = "Trending feed",
+            personality = PersonalityProfile.PRESET_TECH_NERD
+        )
+        assertTrue(reply.isNotBlank())
+
+        val comment = geminiBrain.synthesizeSmartComment(
+            reel = ExtractedReelInfo(
+                packageName = "com.instagram.android",
+                appName = "Instagram",
+                caption = "Clean architecture setup in Android",
+                isTechOrCoding = true
+            ),
+            topComments = listOf("Awesome architecture!"),
+            personality = PersonalityProfile.PRESET_TECH_NERD
+        )
+        assertTrue(comment.isNotBlank())
+    }
+
+    @Test
     fun testCompanionControllerStateFlow() {
         FloatingCompanionController.setCompanionState(CompanionState.THINKING)
         assertEquals(CompanionState.THINKING, FloatingCompanionController.companionState.value)
@@ -81,21 +105,34 @@ class CompanionEngineTest {
     }
 
     @Test
-    fun testExtractedReelInfoSummaryAndHeuristics() {
-        val reel = ExtractedReelInfo(
+    fun testExtractedReelInfoSummaryAndAdaptiveWatch() {
+        val techReel = ExtractedReelInfo(
             packageName = "com.instagram.android",
             appName = "Instagram",
             creator = "tech_creator",
             caption = "Building an ultra-fast Kotlin coroutines dispatcher for high throughput",
             audioTitle = "Coding Beats Vol. 1",
             rawVisibleTexts = listOf("tech_creator", "Follow", "Coding Beats Vol. 1"),
-            isTechOrCoding = true
+            isTechOrCoding = true,
+            likeCountText = "15.4K"
         )
 
-        val summary = reel.getSummary()
+        val summary = techReel.getSummary()
         assertTrue(summary.contains("@tech_creator"))
         assertTrue(summary.contains("Building an ultra-fast"))
-        assertTrue(reel.isTechOrCoding)
+        assertTrue(techReel.isTechOrCoding)
+        assertTrue(techReel.isHighEngagement)
+
+        val watchDuration = techReel.computeAdaptiveWatchDurationSeconds()
+        assertTrue("Watch duration for tech reel should be >= 18s, but was $watchDuration", watchDuration >= 18)
+
+        val quickReel = ExtractedReelInfo(
+            packageName = "com.instagram.android",
+            appName = "Instagram",
+            caption = "hi"
+        )
+        val quickDuration = quickReel.computeAdaptiveWatchDurationSeconds()
+        assertTrue("Quick reel watch duration should be <= 12s, but was $quickDuration", quickDuration <= 12)
     }
 
     @Test
